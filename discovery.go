@@ -39,6 +39,7 @@ func NewDiscovery[T IDType](opts ...DiscoveryOption) *Discovery[T] {
     }
 }
 
+// GRPCClient 获取 ID 对应的 gRPC 客户端连接
 func (x *Discovery[T]) GRPCClient(id T) (*grpc.ClientConn, error) {
     v, ok := x.icMap.Load(id)
     if ok {
