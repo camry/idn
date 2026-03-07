@@ -2,11 +2,11 @@ package sdn_test
 
 import (
     "context"
-    "log"
     "testing"
     "time"
 
     "github.com/camry/dove/v2"
+    "github.com/camry/dove/v2/server"
     "github.com/camry/g/v2/glog"
     clientv3 "go.etcd.io/etcd/client/v3"
 
@@ -26,32 +26,37 @@ func TestNewNode(t *testing.T) {
     if err != nil {
         t.Fatal(err)
     }
-    ns := sdn.NewNode(
-        sdn.Name("Guild"),
-        sdn.Version("1.0.0"),
-        sdn.Addr("127.0.0.1:8080"),
-        sdn.EtcdClient(etcdClient),
-    )
+
+    nsList := make([]server.Server, 0, 5)
+    for i := 0; i < 5; i++ {
+        ns := sdn.NewNode(
+            sdn.Name("Guild"),
+            sdn.Version("1.0.0"),
+            sdn.Addr("127.0.0.1:8080"),
+            sdn.EtcdClient(etcdClient),
+        )
+        nsList = append(nsList, ns)
+    }
 
     app := dove.New(
         dove.Name("dove"),
         dove.Version(dove.Release),
         dove.Context(context.Background()),
-        dove.Server(ns),
+        dove.Server(nsList...),
         dove.BeforeStart(func(_ context.Context) error {
-            log.Println("BeforeStart...")
+            glog.Debug("BeforeStart...")
             return nil
         }),
         dove.BeforeStop(func(_ context.Context) error {
-            log.Println("BeforeStop...")
+            glog.Debug("BeforeStop...")
             return nil
         }),
         dove.AfterStart(func(_ context.Context) error {
-            log.Println("AfterStart...")
+            glog.Debug("AfterStart...")
             return nil
         }),
         dove.AfterStop(func(_ context.Context) error {
-            log.Println("AfterStop...")
+            glog.Debug("AfterStop...")
             return nil
         }),
     )

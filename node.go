@@ -70,7 +70,7 @@ func (x *Node) Start(_ context.Context) error {
     if err != nil {
         return gerror.Wrapf(err, "Node Id %s Name %s Start marshal node config failed", x.opts.id, x.opts.name)
     }
-    _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf("/nodes/%s/%s", x.opts.name, x.opts.id), string(v))
+    _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf("/nodes/%s/service/%s", x.opts.name, x.opts.id), string(v))
     if err != nil {
         return gerror.Wrapf(err, "Node Id %s Name %s Start register to etcd failed", x.opts.id, x.opts.name)
     }
@@ -80,7 +80,7 @@ func (x *Node) Start(_ context.Context) error {
 // Stop 停止节点
 func (x *Node) Stop(_ context.Context) error {
     // 注销节点
-    _, err := x.opts.etcdClient.Delete(x.ctx, fmt.Sprintf("/nodes/%s/%s", x.opts.name, x.opts.id))
+    _, err := x.opts.etcdClient.Delete(x.ctx, fmt.Sprintf("/nodes/%s/service/%s", x.opts.name, x.opts.id))
     if err != nil {
         return gerror.Wrapf(err, "Node Id %s Name %s Stop unregister from etcd failed", x.opts.id, x.opts.name)
     }
