@@ -11,6 +11,7 @@ import (
     "github.com/camry/g/v2/gerrors/gerror"
     "github.com/camry/g/v2/glog"
     "github.com/samber/lo"
+    "github.com/spf13/cast"
     clientv3 "go.etcd.io/etcd/client/v3"
     "google.golang.org/grpc"
     "google.golang.org/grpc/credentials/insecure"
@@ -20,9 +21,9 @@ type Discovery[T IDType] struct {
     opts     *discoveryOptions  // 发现服务选项
     ctx      context.Context    // 发现服务上下文
     cancel   context.CancelFunc // 发现服务取消函数
-    ncMap    sync.Map           // 节点配置映射
-    nGrpcMap sync.Map           // 节点 gRPC 客户端连接池映射
-    icMap    sync.Map           // ID 配置映射
+    ncMap    sync.Map           // 节点配置映射 （节点 ID -> 节点配置）
+    nGrpcMap sync.Map           // 节点 gRPC 客户端连接映射 （节点 ID -> gRPC 客户端连接）
+    icMap    sync.Map           // ID 配置映射 （ID -> 节点 ID）
 }
 
 // NewDiscovery 创建发现服务
@@ -48,13 +49,13 @@ func NewDiscovery[T IDType](opts ...DiscoveryOption) *Discovery[T] {
 }
 
 // GrpcClient 获取 ID 对应的 gRPC 客户端连接
-func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
-    v, ok := x.icMap.Load(id)
+func (x *Discovery[T]) GrpcClient(id T, isNotSave ...bool) (*grpc.ClientConn, error) {
+    nodeId, ok := x.icMap.Load(id)
     if ok {
-        if ic, ok1 := v.(*idConfig); ok1 {
-            return ic.grpcClient, nil
+        if grpcClient, ok2 := x.nGrpcMap.Load(nodeId); ok2 {
+            return grpcClient.(*grpc.ClientConn), nil
         }
-        return nil, gerror.Newf("Discovery NodeName %s ID %v GrpcClient id config not found", x.opts.nodeName, id)
+        return nil, gerror.Newf("Discovery NodeName %s ID %v GrpcClient node %s not found", x.opts.nodeName, id, nodeId)
     }
     // 从节点字典中获取负载最小的节点
     var minLoadNode *nodeConfig
@@ -74,15 +75,20 @@ func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
     if err != nil {
         return nil, gerror.Wrapf(err, "Discovery NodeName %s GrpcClient dial error", x.opts.nodeName)
     }
-    // 创建 ID 配置
-    ic := &idConfig{
-        nodeConfig: minLoadNode,
-        grpcClient: grpcClient,
-    }
     // 存储 ID 配置
-    x.icMap.Store(id, ic)
+    x.icMap.Store(id, minLoadNode.ID)
+    // 存储节点 gRPC 客户端连接
+    x.nGrpcMap.Store(minLoadNode.ID, grpcClient)
+    if len(isNotSave) > 0 && isNotSave[0] {
+        return grpcClient, nil
+    }
     // 更新对应节点的负载值
     minLoadNode.Load++
+    // 将更新后的 ID 映射配置写回 etcd
+    _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(IdMappingKey, x.opts.nodeName, id), minLoadNode.ID)
+    if err != nil {
+        return nil, gerror.Wrapf(err, "Discovery NodeName %s GrpcClient put node id %s etcd error", x.opts.nodeName, minLoadNode.ID)
+    }
     // 将更新后的节点配置写回 etcd
     ncBytes, err := json.Marshal(minLoadNode)
     if err != nil {
@@ -90,7 +96,7 @@ func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
     }
     _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(NodeServiceKey, x.opts.nodeName, minLoadNode.ID), string(ncBytes))
     if err != nil {
-        return nil, gerror.Wrapf(err, "Discovery NodeName %s GrpcClient put etcd error", x.opts.nodeName)
+        return nil, gerror.Wrapf(err, "Discovery NodeName %s GrpcClient put node id %s etcd error", x.opts.nodeName, minLoadNode.ID)
     }
     return grpcClient, nil
 }
@@ -116,6 +122,8 @@ func (x *Discovery[T]) Start(ctx context.Context) error {
     }
     // 协程监听服务节点
     go x.watchServiceNode()
+    // 协程监听 ID 映射
+    go x.watchIDMapping()
     return nil
 }
 
@@ -124,6 +132,22 @@ func (x *Discovery[T]) Stop(ctx context.Context) error {
     if x.cancel != nil {
         x.cancel()
     }
+    // 从 etcd 清空 ID 配置映射
+    x.icMap.Range(func(key, value interface{}) bool {
+        _, err := x.opts.etcdClient.Delete(ctx, fmt.Sprintf(IdMappingKey, x.opts.nodeName, key))
+        if err != nil {
+            glog.Error(gerror.Wrapf(err, "Discovery Stop NodeName %s Delete id %v etcd error", x.opts.nodeName, key))
+        }
+        return true
+    })
+    // 关闭所有 gRPC 客户端连接
+    x.nGrpcMap.Range(func(key, value interface{}) bool {
+        if grpcClient, ok := value.(*grpc.ClientConn); ok {
+            _ = grpcClient.Close()
+        }
+        return true
+    })
+    x.nGrpcMap.Clear()
     x.ncMap.Clear()
     x.icMap.Clear()
     return nil
@@ -172,6 +196,63 @@ func (x *Discovery[T]) watchServiceNode() {
                             continue
                         }
                         x.ncMap.Delete(nodeID)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// watchIDMapping 监听 ID 映射
+func (x *Discovery[T]) watchIDMapping() {
+    key := fmt.Sprintf(DiscoveryMappingsKey, x.opts.nodeName)
+    for {
+        select {
+        case <-x.ctx.Done():
+            glog.Debugf("Discovery watchIDMapping NodeName %s Watch context canceled", x.opts.nodeName)
+            return
+        default:
+            // 创建 watcher
+            watchChan := x.opts.etcdClient.Watch(x.ctx, key, clientv3.WithPrefix())
+
+            // 持续处理 watch 事件
+            for response := range watchChan {
+                if response.Err() != nil {
+                    glog.Error(gerror.Wrapf(response.Err(), "Discovery watchIDMapping NodeName %s Watch etcd error", x.opts.nodeName))
+                    // 短暂延迟后重试
+                    time.Sleep(time.Second)
+                    break // 跳出循环，重新创建 watcher
+                }
+
+                // 处理每个事件
+                for _, event := range response.Events {
+                    switch event.Type {
+                    case clientv3.EventTypePut:
+                        glog.Debugf("Discovery watchIDMapping NodeName %s Key %s updated: %s", x.opts.nodeName, event.Kv.Key, event.Kv.Value)
+                        // 处理键被添加或更新的逻辑
+                        _, err := x.GrpcClient(cast.To[T](event.Kv.Key), true)
+                        if err != nil {
+                            glog.Error(gerror.Wrapf(err, "Discovery watchIDMapping NodeName %s Key %s Value %s GrpcClient error", x.opts.nodeName, event.Kv.Key, event.Kv.Value))
+                            continue
+                        }
+                    case clientv3.EventTypeDelete:
+                        glog.Debugf("Discovery watchIDMapping NodeName %s Key %s deleted", x.opts.nodeName, event.Kv.Key)
+                        // 处理键被删除的逻辑
+                        k, ok := lo.Last(strings.Split(string(event.Kv.Key), "/"))
+                        if !ok {
+                            glog.Error(gerror.Newf("Discovery watchIDMapping NodeName %s Key %s Last Split error", x.opts.nodeName, event.Kv.Key))
+                            continue
+                        }
+                        id := cast.To[T](k)
+                        if nodeId, ok1 := x.icMap.Load(id); !ok1 {
+                            if grpcClient, ok2 := x.nGrpcMap.Load(nodeId); ok2 {
+                                if conn, ok3 := grpcClient.(*grpc.ClientConn); ok3 {
+                                    _ = conn.Close()
+                                }
+                                x.nGrpcMap.Delete(id)
+                            }
+                        }
+                        x.icMap.Delete(id)
                     }
                 }
             }

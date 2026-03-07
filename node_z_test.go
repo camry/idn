@@ -36,7 +36,7 @@ func TestNewNode(t *testing.T) {
     servers := make([]server.Server, 0, 5)
     for i := 1; i <= 5; i++ {
         ns := sdn.NewNode(
-            sdn.NodeName("Guild"),
+            sdn.NodeName("guild"),
             sdn.NodeVersion("1.0.0"),
             sdn.NodeAddr(fmt.Sprintf("%s:%d", intranetIp, 6000+i)),
             sdn.NodeEtcdClient(etcdClient),

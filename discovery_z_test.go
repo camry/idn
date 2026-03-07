@@ -19,13 +19,25 @@ func TestNewDiscovery(t *testing.T) {
     }
 
     servers := make([]server.Server, 0, 5)
+    dsList := make([]*sdn.Discovery[int32], 0, 5)
     for i := 0; i < 5; i++ {
-        ns := sdn.NewDiscovery[int32](
-            sdn.DiscoveryNodeName("Guild"),
+        ds := sdn.NewDiscovery[int32](
+            sdn.DiscoveryNodeName("guild"),
             sdn.DiscoveryEtcdClient(etcdClient),
         )
-        servers = append(servers, ns)
+        servers = append(servers, ds)
+        dsList = append(dsList, ds)
     }
+
+    time.AfterFunc(time.Second*1, func() {
+        for i := 0; i < 3; i++ {
+            _, err = dsList[0].GrpcClient(int32(i))
+            if err != nil {
+                t.Fatal(err)
+
+            }
+        }
+    })
 
     app := dove.New(
         dove.Name("dove"),
