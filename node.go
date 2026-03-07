@@ -57,7 +57,7 @@ func (x *Node) Addr() string {
 // Start 启动节点
 func (x *Node) Start(_ context.Context) error {
     if x.opts.etcdClient == nil {
-        return gerror.Newf("Node Id %s Name %s Start etcd client is nil", x.opts.id, x.opts.name)
+        return gerror.Newf("Node Id %s NodeName %s Start etcd client is nil", x.opts.id, x.opts.name)
     }
     // 注册节点
     nodeConfig := NodeConfig{
@@ -68,11 +68,11 @@ func (x *Node) Start(_ context.Context) error {
     }
     v, err := json.Marshal(nodeConfig)
     if err != nil {
-        return gerror.Wrapf(err, "Node Id %s Name %s Start marshal node config failed", x.opts.id, x.opts.name)
+        return gerror.Wrapf(err, "Node Id %s NodeName %s Start marshal node config failed", x.opts.id, x.opts.name)
     }
-    _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf("/nodes/%s/service/%s", x.opts.name, x.opts.id), string(v))
+    _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(NodeServiceKey, x.opts.name, x.opts.id), string(v))
     if err != nil {
-        return gerror.Wrapf(err, "Node Id %s Name %s Start register to etcd failed", x.opts.id, x.opts.name)
+        return gerror.Wrapf(err, "Node Id %s NodeName %s Start register to etcd failed", x.opts.id, x.opts.name)
     }
     return nil
 }
@@ -80,9 +80,9 @@ func (x *Node) Start(_ context.Context) error {
 // Stop 停止节点
 func (x *Node) Stop(_ context.Context) error {
     // 注销节点
-    _, err := x.opts.etcdClient.Delete(x.ctx, fmt.Sprintf("/nodes/%s/service/%s", x.opts.name, x.opts.id))
+    _, err := x.opts.etcdClient.Delete(x.ctx, fmt.Sprintf(NodeServiceKey, x.opts.name, x.opts.id))
     if err != nil {
-        return gerror.Wrapf(err, "Node Id %s Name %s Stop unregister from etcd failed", x.opts.id, x.opts.name)
+        return gerror.Wrapf(err, "Node Id %s NodeName %s Stop unregister from etcd failed", x.opts.id, x.opts.name)
     }
     if x.cancel != nil {
         x.cancel()

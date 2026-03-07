@@ -6,6 +6,7 @@ require (
 	github.com/camry/dove/v2 v2.0.0
 	github.com/camry/g/v2 v2.0.2
 	github.com/google/uuid v1.6.0
+	github.com/samber/lo v1.53.0
 	go.etcd.io/etcd/client/v3 v3.6.8
 )
 

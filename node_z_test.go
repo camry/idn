@@ -27,22 +27,22 @@ func TestNewNode(t *testing.T) {
         t.Fatal(err)
     }
 
-    nsList := make([]server.Server, 0, 5)
+    servers := make([]server.Server, 0, 5)
     for i := 0; i < 5; i++ {
         ns := sdn.NewNode(
-            sdn.Name("Guild"),
-            sdn.Version("1.0.0"),
-            sdn.Addr("127.0.0.1:8080"),
-            sdn.EtcdClient(etcdClient),
+            sdn.NodeName("Guild"),
+            sdn.NodeVersion("1.0.0"),
+            sdn.NodeAddr("127.0.0.1:8080"),
+            sdn.NodeEtcdClient(etcdClient),
         )
-        nsList = append(nsList, ns)
+        servers = append(servers, ns)
     }
 
     app := dove.New(
         dove.Name("dove"),
         dove.Version(dove.Release),
         dove.Context(context.Background()),
-        dove.Server(nsList...),
+        dove.Server(servers...),
         dove.BeforeStart(func(_ context.Context) error {
             glog.Debug("BeforeStart...")
             return nil
@@ -60,7 +60,7 @@ func TestNewNode(t *testing.T) {
             return nil
         }),
     )
-    time.AfterFunc(time.Minute, func() {
+    time.AfterFunc(time.Hour, func() {
         _ = app.Stop()
     })
     if err := app.Run(); err != nil {
