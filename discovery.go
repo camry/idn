@@ -84,6 +84,7 @@ func (x *Discovery[T]) GrpcClient(id T, isNotSave ...bool) (*grpc.ClientConn, er
     }
     // 更新对应节点的负载值
     minLoadNode.Load++
+    // TODO 存储当前 Discovery 节点负载值
     // 将更新后的 ID 映射配置写回 etcd
     _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(IdMappingKey, x.opts.nodeName, id), minLoadNode.ID)
     if err != nil {
