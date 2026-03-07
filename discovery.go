@@ -17,11 +17,12 @@ import (
 )
 
 type Discovery[T IDType] struct {
-    opts   *discoveryOptions  // 发现服务选项
-    ctx    context.Context    // 发现服务上下文
-    cancel context.CancelFunc // 发现服务取消函数
-    ncMap  sync.Map           // 节点配置映射
-    icMap  sync.Map           // ID 配置映射
+    opts     *discoveryOptions  // 发现服务选项
+    ctx      context.Context    // 发现服务上下文
+    cancel   context.CancelFunc // 发现服务取消函数
+    ncMap    sync.Map           // 节点配置映射
+    nGrpcMap sync.Map           // 节点 gRPC 客户端连接映射
+    icMap    sync.Map           // ID 配置映射
 }
 
 // NewDiscovery 创建发现服务
@@ -46,14 +47,14 @@ func NewDiscovery[T IDType](opts ...DiscoveryOption) *Discovery[T] {
     }
 }
 
-// GRPCClient 获取 ID 对应的 gRPC 客户端连接
-func (x *Discovery[T]) GRPCClient(id T) (*grpc.ClientConn, error) {
+// GrpcClient 获取 ID 对应的 gRPC 客户端连接
+func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
     v, ok := x.icMap.Load(id)
     if ok {
         if ic, ok1 := v.(*idConfig); ok1 {
             return ic.grpcClient, nil
         }
-        return nil, gerror.Newf("Discovery NodeName %s ID %v GRPCClient id config not found", x.opts.nodeName, id)
+        return nil, gerror.Newf("Discovery NodeName %s ID %v GrpcClient id config not found", x.opts.nodeName, id)
     }
     // 从节点字典中获取负载最小的节点
     var minLoadNode *nodeConfig
@@ -66,12 +67,12 @@ func (x *Discovery[T]) GRPCClient(id T) (*grpc.ClientConn, error) {
         return true
     })
     if minLoadNode == nil {
-        return nil, gerror.Newf("Discovery NodeName %s GRPCClient no available nodes", x.opts.nodeName)
+        return nil, gerror.Newf("Discovery NodeName %s GrpcClient no available nodes", x.opts.nodeName)
     }
     // 创建 gRPC 客户端连接
     grpcClient, err := grpc.NewClient(minLoadNode.Addr, x.opts.grpcDialOptions...)
     if err != nil {
-        return nil, gerror.Wrapf(err, "Discovery NodeName %s GRPCClient dial error", x.opts.nodeName)
+        return nil, gerror.Wrapf(err, "Discovery NodeName %s GrpcClient dial error", x.opts.nodeName)
     }
     // 创建 ID 配置
     ic := &idConfig{
@@ -85,11 +86,11 @@ func (x *Discovery[T]) GRPCClient(id T) (*grpc.ClientConn, error) {
     // 将更新后的节点配置写回 etcd
     ncBytes, err := json.Marshal(minLoadNode)
     if err != nil {
-        return nil, gerror.Wrapf(err, "Discovery NodeName %s GRPCClient marshal node config error", x.opts.nodeName)
+        return nil, gerror.Wrapf(err, "Discovery NodeName %s GrpcClient marshal node config error", x.opts.nodeName)
     }
     _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(NodeServiceKey, x.opts.nodeName, minLoadNode.ID), string(ncBytes))
     if err != nil {
-        return nil, gerror.Wrapf(err, "Discovery NodeName %s GRPCClient put etcd error", x.opts.nodeName)
+        return nil, gerror.Wrapf(err, "Discovery NodeName %s GrpcClient put etcd error", x.opts.nodeName)
     }
     return grpcClient, nil
 }
