@@ -60,13 +60,13 @@ func (x *Node) Start(_ context.Context) error {
         return gerror.Newf("Node Id %s NodeName %s Start etcd client is nil", x.opts.id, x.opts.name)
     }
     // 注册节点
-    nodeConfig := NodeConfig{
+    nc := nodeConfig{
         ID:      x.opts.id,
         Name:    x.opts.name,
         Version: x.opts.version,
         Addr:    x.opts.addr,
     }
-    v, err := json.Marshal(nodeConfig)
+    v, err := json.Marshal(nc)
     if err != nil {
         return gerror.Wrapf(err, "Node Id %s NodeName %s Start marshal node config failed", x.opts.id, x.opts.name)
     }

@@ -20,7 +20,7 @@ func TestNewDiscovery(t *testing.T) {
 
     servers := make([]server.Server, 0, 5)
     for i := 0; i < 5; i++ {
-        ns := sdn.NewDiscovery(
+        ns := sdn.NewDiscovery[int32](
             sdn.DiscoveryNodeName("Guild"),
             sdn.DiscoveryEtcdClient(etcdClient),
         )
