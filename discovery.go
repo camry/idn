@@ -32,6 +32,12 @@ func NewDiscovery[T IDType](opts ...DiscoveryOption) *Discovery[T] {
     for _, opt := range opts {
         opt(o)
     }
+    // 设置默认 gRPC 客户端连接选项
+    if len(o.grpcDialOptions) == 0 {
+        o.grpcDialOptions = []grpc.DialOption{
+            grpc.WithTransportCredentials(insecure.NewCredentials()),
+        }
+    }
     ctx, cancel := context.WithCancel(o.ctx)
     return &Discovery[T]{
         ctx:    ctx,
@@ -63,7 +69,7 @@ func (x *Discovery[T]) GRPCClient(id T) (*grpc.ClientConn, error) {
         return nil, gerror.Newf("Discovery NodeName %s GRPCClient no available nodes", x.opts.nodeName)
     }
     // 创建 gRPC 客户端连接
-    grpcClient, err := grpc.NewClient(minLoadNode.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+    grpcClient, err := grpc.NewClient(minLoadNode.Addr, x.opts.grpcDialOptions...)
     if err != nil {
         return nil, gerror.Wrapf(err, "Discovery NodeName %s GRPCClient dial error", x.opts.nodeName)
     }
