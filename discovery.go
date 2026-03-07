@@ -13,6 +13,7 @@ import (
     "github.com/samber/lo"
     clientv3 "go.etcd.io/etcd/client/v3"
     "google.golang.org/grpc"
+    "google.golang.org/grpc/credentials/insecure"
 )
 
 type Discovery[T IDType] struct {
@@ -48,8 +49,43 @@ func (x *Discovery[T]) GRPCClient(id T) (*grpc.ClientConn, error) {
         }
         return nil, gerror.Newf("Discovery NodeName %s ID %v GRPCClient id config not found", x.opts.nodeName, id)
     }
-    // TODO 从节点字典中获取负载最小的节点，并初始化 ID 配置，更新对应节点的负载值
-    return nil, nil
+    // 从节点字典中获取负载最小的节点
+    var minLoadNode *nodeConfig
+    x.ncMap.Range(func(key, value interface{}) bool {
+        if nc, ok1 := value.(*nodeConfig); ok1 {
+            if minLoadNode == nil || nc.Load < minLoadNode.Load {
+                minLoadNode = nc
+            }
+        }
+        return true
+    })
+    if minLoadNode == nil {
+        return nil, gerror.Newf("Discovery NodeName %s GRPCClient no available nodes", x.opts.nodeName)
+    }
+    // 创建 gRPC 客户端连接
+    grpcClient, err := grpc.NewClient(minLoadNode.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+    if err != nil {
+        return nil, gerror.Wrapf(err, "Discovery NodeName %s GRPCClient dial error", x.opts.nodeName)
+    }
+    // 创建 ID 配置
+    ic := &idConfig{
+        nodeConfig: minLoadNode,
+        grpcClient: grpcClient,
+    }
+    // 存储 ID 配置
+    x.icMap.Store(id, ic)
+    // 更新对应节点的负载值
+    minLoadNode.Load++
+    // 将更新后的节点配置写回 etcd
+    ncBytes, err := json.Marshal(minLoadNode)
+    if err != nil {
+        return nil, gerror.Wrapf(err, "Discovery NodeName %s GRPCClient marshal node config error", x.opts.nodeName)
+    }
+    _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(NodeServiceKey, x.opts.nodeName, minLoadNode.ID), string(ncBytes))
+    if err != nil {
+        return nil, gerror.Wrapf(err, "Discovery NodeName %s GRPCClient put etcd error", x.opts.nodeName)
+    }
+    return grpcClient, nil
 }
 
 // Start 启动发现服务
