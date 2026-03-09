@@ -5,5 +5,5 @@ type nodeConfig struct {
     Name    string `json:"name"`
     Version string `json:"version"`
     Addr    string `json:"addr"`
-    Load    int    `json:"load"`
+    Load    int32  `json:"load"`
 }

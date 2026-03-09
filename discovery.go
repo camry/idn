@@ -6,6 +6,7 @@ import (
     "fmt"
     "strings"
     "sync"
+    "sync/atomic"
     "time"
 
     "github.com/camry/g/v2/gerrors/gerror"
@@ -49,13 +50,13 @@ func NewDiscovery[T IDType](opts ...DiscoveryOption) *Discovery[T] {
 }
 
 // GrpcClient 获取 ID 对应的 gRPC 客户端连接
-func (x *Discovery[T]) GrpcClient(id T, isNotSave ...bool) (*grpc.ClientConn, error) {
+func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
     nodeId, ok := x.icMap.Load(id)
     if ok {
         if grpcClient, ok2 := x.nGrpcMap.Load(nodeId); ok2 {
             return grpcClient.(*grpc.ClientConn), nil
         }
-        return nil, gerror.Newf("Discovery NodeName %s ID %v GrpcClient node %s not found", x.opts.nodeName, id, nodeId)
+        return nil, gerror.Newf("Discovery GrpcClient NodeName %s ID %v node %s not found", x.opts.nodeName, id, nodeId)
     }
     // 从节点字典中获取负载最小的节点
     var minLoadNode *nodeConfig
@@ -68,38 +69,37 @@ func (x *Discovery[T]) GrpcClient(id T, isNotSave ...bool) (*grpc.ClientConn, er
         return true
     })
     if minLoadNode == nil {
-        return nil, gerror.Newf("Discovery NodeName %s GrpcClient no available nodes", x.opts.nodeName)
+        return nil, gerror.Newf("Discovery GrpcClient NodeName %s no available nodes", x.opts.nodeName)
     }
-    // 创建 gRPC 客户端连接
-    grpcClient, err := grpc.NewClient(minLoadNode.Addr, x.opts.grpcDialOptions...)
-    if err != nil {
-        return nil, gerror.Wrapf(err, "Discovery NodeName %s GrpcClient dial error", x.opts.nodeName)
+    grpcClient, ok := x.nGrpcMap.Load(minLoadNode.ID)
+    if !ok {
+        // 创建 gRPC 客户端连接
+        grpcClientNew, err := grpc.NewClient(minLoadNode.Addr, x.opts.grpcDialOptions...)
+        if err != nil {
+            return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s grpc.NewClient dial error", x.opts.nodeName)
+        }
+        grpcClient = grpcClientNew
+        x.nGrpcMap.Store(minLoadNode.ID, grpcClient)
     }
     // 存储 ID 配置
     x.icMap.Store(id, minLoadNode.ID)
-    // 存储节点 gRPC 客户端连接
-    x.nGrpcMap.Store(minLoadNode.ID, grpcClient)
-    if len(isNotSave) > 0 && isNotSave[0] {
-        return grpcClient, nil
-    }
     // 更新对应节点的负载值
-    minLoadNode.Load++
-    // TODO 存储当前 Discovery 节点负载值
+    atomic.AddInt32(&minLoadNode.Load, 1)
     // 将更新后的 ID 映射配置写回 etcd
-    _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(IdMappingKey, x.opts.nodeName, id), minLoadNode.ID)
+    _, err := x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(IdMappingKey, x.opts.nodeName, id), minLoadNode.ID)
     if err != nil {
-        return nil, gerror.Wrapf(err, "Discovery NodeName %s GrpcClient put node id %s etcd error", x.opts.nodeName, minLoadNode.ID)
+        return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s put node id %s etcd error", x.opts.nodeName, minLoadNode.ID)
     }
     // 将更新后的节点配置写回 etcd
     ncBytes, err := json.Marshal(minLoadNode)
     if err != nil {
-        return nil, gerror.Wrapf(err, "Discovery NodeName %s GrpcClient marshal node config error", x.opts.nodeName)
+        return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s marshal node config error", x.opts.nodeName)
     }
     _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(NodeServiceKey, x.opts.nodeName, minLoadNode.ID), string(ncBytes))
     if err != nil {
-        return nil, gerror.Wrapf(err, "Discovery NodeName %s GrpcClient put node id %s etcd error", x.opts.nodeName, minLoadNode.ID)
+        return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s put node id %s etcd error", x.opts.nodeName, minLoadNode.ID)
     }
-    return grpcClient, nil
+    return grpcClient.(*grpc.ClientConn), nil
 }
 
 // Start 启动发现服务
