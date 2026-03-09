@@ -36,6 +36,7 @@ func TestNewDiscovery(t *testing.T) {
                 t.Fatal(err)
 
             }
+            time.Sleep(time.Second * 3)
         }
     })
 
@@ -61,7 +62,7 @@ func TestNewDiscovery(t *testing.T) {
             return nil
         }),
     )
-    time.AfterFunc(time.Minute, func() {
+    time.AfterFunc(time.Second*10, func() {
         _ = app.Stop()
     })
     if err := app.Run(); err != nil {
