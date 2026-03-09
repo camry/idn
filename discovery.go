@@ -249,23 +249,26 @@ func (x *Discovery[T]) watchIDMapping() {
                         nodeId := cast.ToString(event.Kv.Value)
                         _, ok := x.icMap.Load(id)
                         if !ok {
-                            ncV, ok1 := x.ncMap.Load(nodeId)
+                            _, ok1 := x.nGrpcMap.Load(nodeId)
                             if !ok1 {
-                                glog.Error(gerror.Newf("Discovery watchIDMapping NodeName %s Key %s Value %s Load NodeConfig not found", x.opts.nodeName, event.Kv.Key, event.Kv.Value))
-                                continue
-                            }
-                            nc, ok2 := ncV.(*nodeConfig)
-                            if !ok2 {
-                                glog.Error(gerror.Newf("Discovery watchIDMapping NodeName %s Key %s Value %s Match NodeConfig Failed", x.opts.nodeName, event.Kv.Key, event.Kv.Value))
-                                continue
-                            }
-                            grpcClient, err := grpc.NewClient(nc.Addr, x.opts.grpcDialOptions...)
-                            if err != nil {
-                                glog.Error(gerror.Wrapf(err, "Discovery watchIDMapping NodeName %s Key %s Value %s GrpcClient dial error", x.opts.nodeName, event.Kv.Key, event.Kv.Value))
-                                continue
+                                ncV, ok2 := x.ncMap.Load(nodeId)
+                                if !ok2 {
+                                    glog.Error(gerror.Newf("Discovery watchIDMapping NodeName %s Key %s Value %s Load NodeConfig not found", x.opts.nodeName, event.Kv.Key, event.Kv.Value))
+                                    continue
+                                }
+                                nc, ok2 := ncV.(*nodeConfig)
+                                if !ok2 {
+                                    glog.Error(gerror.Newf("Discovery watchIDMapping NodeName %s Key %s Value %s Match NodeConfig Failed", x.opts.nodeName, event.Kv.Key, event.Kv.Value))
+                                    continue
+                                }
+                                grpcClient, err := grpc.NewClient(nc.Addr, x.opts.grpcDialOptions...)
+                                if err != nil {
+                                    glog.Error(gerror.Wrapf(err, "Discovery watchIDMapping NodeName %s Key %s Value %s GrpcClient dial error", x.opts.nodeName, event.Kv.Key, event.Kv.Value))
+                                    continue
+                                }
+                                x.nGrpcMap.Store(nodeId, grpcClient)
                             }
                             x.icMap.Store(id, nodeId)
-                            x.nGrpcMap.Store(nodeId, grpcClient)
                         }
                     }
                 }
