@@ -7,6 +7,8 @@ import (
 
     "github.com/camry/g/v2/gerrors/gerror"
     "github.com/google/uuid"
+    "github.com/spf13/cast"
+    clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 type Node struct {
@@ -80,9 +82,23 @@ func (x *Node) Start(_ context.Context) error {
 // Stop 停止节点
 func (x *Node) Stop(_ context.Context) error {
     // 注销节点
-    _, err := x.opts.etcdClient.Delete(x.ctx, fmt.Sprintf(NodeServiceKey, x.opts.name, x.opts.id))
+    nodeServiceKey := fmt.Sprintf(NodeServiceKey, x.opts.name, x.opts.id)
+    _, err := x.opts.etcdClient.Delete(x.ctx, nodeServiceKey)
     if err != nil {
-        return gerror.Wrapf(err, "Node Id %s NodeName %s Stop unregister from etcd failed", x.opts.id, x.opts.name)
+        return gerror.Wrapf(err, "Node Stop Id %s NodeName %s NodeServiceKey %s Delete etcd failed", x.opts.id, x.opts.name, nodeServiceKey)
+    }
+    resp, err := x.opts.etcdClient.Get(x.ctx, fmt.Sprintf(DiscoveryMappingsKey, x.opts.name), clientv3.WithPrefix())
+    if err != nil {
+        return gerror.Wrapf(err, "Node Stop Id %s NodeName %s DiscoveryMappingsKey %s Get etcd failed", x.opts.id, x.opts.name, DiscoveryMappingsKey)
+    }
+    for _, kv := range resp.Kvs {
+        nodeId := cast.ToString(kv.Value)
+        if nodeId == x.opts.id {
+            _, err = x.opts.etcdClient.Delete(x.ctx, string(kv.Key))
+            if err != nil {
+                return gerror.Wrapf(err, "Node Stop Id %s NodeName %s DiscoveryMappingsKey %s Delete etcd failed", x.opts.id, x.opts.name, kv.Key)
+            }
+        }
     }
     if x.cancel != nil {
         x.cancel()
