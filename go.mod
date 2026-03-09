@@ -1,4 +1,4 @@
-module gitea.meigushi.go/meigushi/sdn
+module gitea.meigushi.go/meigushi/idn
 
 go 1.25.6
 

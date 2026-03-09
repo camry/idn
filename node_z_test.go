@@ -12,7 +12,7 @@ import (
     "github.com/camry/g/v2/gnet/gipv4"
     clientv3 "go.etcd.io/etcd/client/v3"
 
-    "gitea.meigushi.go/meigushi/sdn"
+    "gitea.meigushi.go/meigushi/idn"
 )
 
 func defaultEtcdClient() (*clientv3.Client, error) {

@@ -9,7 +9,7 @@ import (
     "github.com/camry/dove/v2/server"
     "github.com/camry/g/v2/glog"
 
-    "gitea.meigushi.go/meigushi/sdn"
+    "gitea.meigushi.go/meigushi/idn"
 )
 
 func TestNewDiscovery(t *testing.T) {
