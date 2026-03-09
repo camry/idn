@@ -22,9 +22,9 @@ type Discovery[T IDType] struct {
     opts     *discoveryOptions  // 发现服务选项
     ctx      context.Context    // 发现服务上下文
     cancel   context.CancelFunc // 发现服务取消函数
-    ncMap    sync.Map           // 节点配置映射 （节点 ID -> 节点配置）
-    nGrpcMap sync.Map           // 节点 gRPC 客户端连接映射 （节点 ID -> gRPC 客户端连接）
-    icMap    sync.Map           // ID 配置映射 （ID -> 节点 ID）
+    ncMap    sync.Map           // 节点配置映射（节点 ID -> 节点配置）
+    nGrpcMap sync.Map           // 节点 gRPC 客户端连接映射（节点 ID -> gRPC 客户端连接）
+    icMap    sync.Map           // ID 配置映射（ID -> 节点 ID）
 }
 
 // NewDiscovery 创建发现服务
