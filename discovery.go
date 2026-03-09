@@ -105,21 +105,49 @@ func (x *Discovery[T]) GrpcClient(id T, isNotSave ...bool) (*grpc.ClientConn, er
 // Start 启动发现服务
 func (x *Discovery[T]) Start(ctx context.Context) error {
     if x.opts.etcdClient == nil {
-        return gerror.Newf("Discovery NodeName %s Start etcd client is nil", x.opts.nodeName)
+        return gerror.Newf("Discovery Start NodeName %s etcd client is nil", x.opts.nodeName)
     }
-    // 获取所有服务节点
+    // 初始化所有服务节点
     resp, err := x.opts.etcdClient.Get(ctx, fmt.Sprintf(DiscoveryServiceKey, x.opts.nodeName), clientv3.WithPrefix())
     if err != nil {
-        return gerror.Wrapf(err, "Discovery NodeName %s Get etcd error", x.opts.nodeName)
+        return gerror.Wrapf(err, "Discovery Start NodeName %s DiscoveryServiceKey Get etcd error", x.opts.nodeName)
     }
     for _, kv := range resp.Kvs {
         nc := &nodeConfig{}
         err = json.Unmarshal(kv.Value, nc)
         if err != nil {
-            return gerror.Wrapf(err, "Discovery NodeName %s Key %s Value %s Unmarshal etcd error", x.opts.nodeName, kv.Key, kv.Value)
+            return gerror.Wrapf(err, "Discovery Start NodeName %s DiscoveryServiceKey Key %s Value %s Unmarshal etcd error", x.opts.nodeName, kv.Key, kv.Value)
         }
-        glog.Debugf("Discovery NodeName %s Key %s Value %s", x.opts.nodeName, kv.Key, kv.Value)
+        glog.Debugf("Discovery Start NodeName %s DiscoveryServiceKey Key %s Value %s", x.opts.nodeName, kv.Key, kv.Value)
         x.ncMap.Store(nc.ID, nc)
+    }
+    // 初始化所有 ID 映射和节点 gRPC 客户端连接映射
+    resp, err = x.opts.etcdClient.Get(ctx, fmt.Sprintf(DiscoveryMappingsKey, x.opts.nodeName), clientv3.WithPrefix())
+    if err != nil {
+        return gerror.Wrapf(err, "Discovery Start NodeName %s DiscoveryMappingsKey Get etcd error", x.opts.nodeName)
+    }
+    for _, kv := range resp.Kvs {
+        idV, ok := lo.Last(strings.Split(string(kv.Key), "/"))
+        if !ok {
+            return gerror.Newf("Discovery Start NodeName %s DiscoveryMappingsKey Key %s Last Split error", x.opts.nodeName, kv.Key)
+        }
+        id := cast.To[T](idV)
+        nodeId := cast.ToString(kv.Value)
+        ncV, ok := x.ncMap.Load(nodeId)
+        if !ok {
+            return gerror.Newf("Discovery Start NodeName %s DiscoveryMappingsKey Key %s Value %s Load NodeConfig not found", x.opts.nodeName, kv.Key, kv.Value)
+        }
+        nc, ok := ncV.(*nodeConfig)
+        if !ok {
+            return gerror.Newf("Discovery Start NodeName %s DiscoveryMappingsKey Key %s Value %s Match NodeConfig Failed", x.opts.nodeName, kv.Key, kv.Value)
+        }
+        grpcClient, err1 := grpc.NewClient(nc.Addr, x.opts.grpcDialOptions...)
+        if err1 != nil {
+            return gerror.Wrapf(err1, "Discovery Start NodeName %s DiscoveryMappingsKey Key %s Value %s GrpcClient dial error", x.opts.nodeName, kv.Key, kv.Value)
+        }
+        x.nGrpcMap.Store(nodeId, grpcClient)
+        x.icMap.Store(id, nodeId)
+        glog.Debugf("Discovery Start NodeName %s DiscoveryMappingsKey Key %s Value %s", x.opts.nodeName, kv.Key, kv.Value)
     }
     // 协程监听服务节点
     go x.watchServiceNode()
@@ -133,14 +161,6 @@ func (x *Discovery[T]) Stop(ctx context.Context) error {
     if x.cancel != nil {
         x.cancel()
     }
-    // 从 etcd 清空 ID 配置映射
-    x.icMap.Range(func(key, value interface{}) bool {
-        _, err := x.opts.etcdClient.Delete(ctx, fmt.Sprintf(IdMappingKey, x.opts.nodeName, key))
-        if err != nil {
-            glog.Error(gerror.Wrapf(err, "Discovery Stop NodeName %s Delete id %v etcd error", x.opts.nodeName, key))
-        }
-        return true
-    })
     // 关闭所有 gRPC 客户端连接
     x.nGrpcMap.Range(func(key, value interface{}) bool {
         if grpcClient, ok := value.(*grpc.ClientConn); ok {
@@ -245,9 +265,14 @@ func (x *Discovery[T]) watchIDMapping() {
                     case clientv3.EventTypePut:
                         glog.Debugf("Discovery watchIDMapping NodeName %s Key %s updated: %s", x.opts.nodeName, event.Kv.Key, event.Kv.Value)
                         // 处理键被添加或更新的逻辑
-                        id := cast.To[T](event.Kv.Key)
+                        idV, ok := lo.Last(strings.Split(string(event.Kv.Key), "/"))
+                        if !ok {
+                            glog.Error(gerror.Newf("Discovery watchIDMapping NodeName %s Key %s Last Split error", x.opts.nodeName, event.Kv.Key))
+                            continue
+                        }
+                        id := cast.To[T](idV)
                         nodeId := cast.ToString(event.Kv.Value)
-                        _, ok := x.icMap.Load(id)
+                        _, ok = x.icMap.Load(id)
                         if !ok {
                             _, ok1 := x.nGrpcMap.Load(nodeId)
                             if !ok1 {
