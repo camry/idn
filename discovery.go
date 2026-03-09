@@ -191,12 +191,26 @@ func (x *Discovery[T]) watchServiceNode() {
                     case clientv3.EventTypeDelete:
                         glog.Debugf("Discovery watchServiceNode NodeName %s Key %s deleted", x.opts.nodeName, event.Kv.Key)
                         // 处理键被删除的逻辑
-                        nodeID, ok := lo.Last(strings.Split(string(event.Kv.Key), "/"))
+                        nodeId, ok := lo.Last(strings.Split(string(event.Kv.Key), "/"))
                         if !ok {
                             glog.Error(gerror.Newf("Discovery watchServiceNode NodeName %s Key %s Last Split error", x.opts.nodeName, event.Kv.Key))
                             continue
                         }
-                        x.ncMap.Delete(nodeID)
+                        x.icMap.Range(func(key, value any) bool {
+                            idK := cast.To[T](key)
+                            nodeIdV := cast.ToString(value)
+                            if nodeIdV == nodeId {
+                                x.icMap.Delete(idK)
+                            }
+                            return true
+                        })
+                        if grpcClient, ok1 := x.nGrpcMap.Load(nodeId); ok1 {
+                            if conn, ok2 := grpcClient.(*grpc.ClientConn); ok2 {
+                                _ = conn.Close()
+                            }
+                            x.nGrpcMap.Delete(nodeId)
+                        }
+                        x.ncMap.Delete(nodeId)
                     }
                 }
             }
@@ -253,24 +267,6 @@ func (x *Discovery[T]) watchIDMapping() {
                             x.icMap.Store(id, nodeId)
                             x.nGrpcMap.Store(nodeId, grpcClient)
                         }
-                    case clientv3.EventTypeDelete:
-                        glog.Debugf("Discovery watchIDMapping NodeName %s Key %s deleted", x.opts.nodeName, event.Kv.Key)
-                        // 处理键被删除的逻辑
-                        k, ok := lo.Last(strings.Split(string(event.Kv.Key), "/"))
-                        if !ok {
-                            glog.Error(gerror.Newf("Discovery watchIDMapping NodeName %s Key %s Last Split error", x.opts.nodeName, event.Kv.Key))
-                            continue
-                        }
-                        id := cast.To[T](k)
-                        if nodeId, ok1 := x.icMap.Load(id); !ok1 {
-                            if grpcClient, ok2 := x.nGrpcMap.Load(nodeId); ok2 {
-                                if conn, ok3 := grpcClient.(*grpc.ClientConn); ok3 {
-                                    _ = conn.Close()
-                                }
-                                x.nGrpcMap.Delete(id)
-                            }
-                        }
-                        x.icMap.Delete(id)
                     }
                 }
             }
