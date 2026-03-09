@@ -1,4 +1,4 @@
-package sdn_test
+package idn_test
 
 import (
     "context"
@@ -19,11 +19,11 @@ func TestNewDiscovery(t *testing.T) {
     }
 
     servers := make([]server.Server, 0, 5)
-    dsList := make([]*sdn.Discovery[int32], 0, 5)
+    dsList := make([]*idn.Discovery[int32], 0, 5)
     for i := 0; i < 5; i++ {
-        ds := sdn.NewDiscovery[int32](
-            sdn.DiscoveryNodeName("guild"),
-            sdn.DiscoveryEtcdClient(etcdClient),
+        ds := idn.NewDiscovery[int32](
+            idn.DiscoveryNodeName("guild"),
+            idn.DiscoveryEtcdClient(etcdClient),
         )
         servers = append(servers, ds)
         dsList = append(dsList, ds)

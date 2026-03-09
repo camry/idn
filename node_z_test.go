@@ -1,4 +1,4 @@
-package sdn_test
+package idn_test
 
 import (
     "context"
@@ -35,11 +35,11 @@ func TestNewNode(t *testing.T) {
 
     servers := make([]server.Server, 0, 5)
     for i := 1; i <= 5; i++ {
-        ns := sdn.NewNode(
-            sdn.NodeName("guild"),
-            sdn.NodeVersion("1.0.0"),
-            sdn.NodeAddr(fmt.Sprintf("%s:%d", intranetIp, 6000+i)),
-            sdn.NodeEtcdClient(etcdClient),
+        ns := idn.NewNode(
+            idn.NodeName("guild"),
+            idn.NodeVersion("1.0.0"),
+            idn.NodeAddr(fmt.Sprintf("%s:%d", intranetIp, 6000+i)),
+            idn.NodeEtcdClient(etcdClient),
         )
         servers = append(servers, ns)
     }

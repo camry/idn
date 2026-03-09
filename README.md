@@ -1,4 +1,4 @@
-# sdn
+# idn
 
 ID 分布式节点组件，提供基于 etcd 的服务注册、发现和负载均衡功能。
 
@@ -14,7 +14,7 @@ ID 分布式节点组件，提供基于 etcd 的服务注册、发现和负载�
 ## 安装
 
 ```bash
-go get gitea.meigushi.go/meigushi/sdn
+go get gitea.meigushi.go/meigushi/idn
 ```
 
 ## 快速开始
@@ -34,7 +34,7 @@ import (
     "github.com/camry/g/v2/gnet/gipv4"
     clientv3 "go.etcd.io/etcd/client/v3"
 
-    "gitea.meigushi.go/meigushi/sdn"
+    "gitea.meigushi.go/meigushi/idn"
 )
 
 func main() {
@@ -54,11 +54,11 @@ func main() {
     }
 
     // 创建节点服务
-    ns := sdn.NewNode(
-        sdn.NodeName("guild"),
-        sdn.NodeVersion("1.0.0"),
-        sdn.NodeAddr(fmt.Sprintf("%s:%d", intranetIp, 6001)),
-        sdn.NodeEtcdClient(etcdClient),
+    ns := idn.NewNode(
+        idn.NodeName("guild"),
+        idn.NodeVersion("1.0.0"),
+        idn.NodeAddr(fmt.Sprintf("%s:%d", intranetIp, 6001)),
+        idn.NodeEtcdClient(etcdClient),
     )
 
     // 创建并运行 dove 应用
@@ -87,7 +87,7 @@ import (
     "github.com/camry/dove/v2/server"
     clientv3 "go.etcd.io/etcd/client/v3"
 
-    "gitea.meigushi.go/meigushi/sdn"
+    "gitea.meigushi.go/meigushi/idn"
 )
 
 func main() {
@@ -101,9 +101,9 @@ func main() {
     }
 
     // 创建发现服务
-    ds := sdn.NewDiscovery[int32](
-        sdn.DiscoveryNodeName("guild"),
-        sdn.DiscoveryEtcdClient(etcdClient),
+    ds := idn.NewDiscovery[int32](
+        idn.DiscoveryNodeName("guild"),
+        idn.DiscoveryEtcdClient(etcdClient),
     )
 
     // 创建并运行 dove 应用

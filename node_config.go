@@ -1,4 +1,4 @@
-package sdn
+package idn
 
 type nodeConfig struct {
     ID      string `json:"id"`
