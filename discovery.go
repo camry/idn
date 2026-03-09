@@ -231,10 +231,27 @@ func (x *Discovery[T]) watchIDMapping() {
                     case clientv3.EventTypePut:
                         glog.Debugf("Discovery watchIDMapping NodeName %s Key %s updated: %s", x.opts.nodeName, event.Kv.Key, event.Kv.Value)
                         // 处理键被添加或更新的逻辑
-                        _, err := x.GrpcClient(cast.To[T](event.Kv.Key), true)
-                        if err != nil {
-                            glog.Error(gerror.Wrapf(err, "Discovery watchIDMapping NodeName %s Key %s Value %s GrpcClient error", x.opts.nodeName, event.Kv.Key, event.Kv.Value))
-                            continue
+                        id := cast.To[T](event.Kv.Key)
+                        nodeId := cast.ToString(event.Kv.Value)
+                        _, ok := x.icMap.Load(id)
+                        if !ok {
+                            ncV, ok1 := x.ncMap.Load(nodeId)
+                            if !ok1 {
+                                glog.Error(gerror.Newf("Discovery watchIDMapping NodeName %s Key %s Value %s Load NodeConfig not found", x.opts.nodeName, event.Kv.Key, event.Kv.Value))
+                                continue
+                            }
+                            nc, ok2 := ncV.(*nodeConfig)
+                            if !ok2 {
+                                glog.Error(gerror.Newf("Discovery watchIDMapping NodeName %s Key %s Value %s Match NodeConfig Failed", x.opts.nodeName, event.Kv.Key, event.Kv.Value))
+                                continue
+                            }
+                            grpcClient, err := grpc.NewClient(nc.Addr, x.opts.grpcDialOptions...)
+                            if err != nil {
+                                glog.Error(gerror.Wrapf(err, "Discovery watchIDMapping NodeName %s Key %s Value %s GrpcClient dial error", x.opts.nodeName, event.Kv.Key, event.Kv.Value))
+                                continue
+                            }
+                            x.icMap.Store(id, nodeId)
+                            x.nGrpcMap.Store(nodeId, grpcClient)
                         }
                     case clientv3.EventTypeDelete:
                         glog.Debugf("Discovery watchIDMapping NodeName %s Key %s deleted", x.opts.nodeName, event.Kv.Key)
