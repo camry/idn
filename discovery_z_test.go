@@ -34,7 +34,6 @@ func TestNewDiscovery(t *testing.T) {
             _, err = dsList[0].GrpcClient(int32(i))
             if err != nil {
                 t.Fatal(err)
-
             }
             time.Sleep(time.Second * 3)
         }
