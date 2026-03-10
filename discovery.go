@@ -69,7 +69,7 @@ func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
     }
     // 从节点字典中获取负载最小的节点
     var minLoadNode *nodeConfig
-    x.ncMap.Range(func(key, value interface{}) bool {
+    x.ncMap.Range(func(key, value any) bool {
         if nc, ok1 := value.(*nodeConfig); ok1 {
             if minLoadNode == nil || nc.Load < minLoadNode.Load {
                 minLoadNode = nc
@@ -173,7 +173,7 @@ func (x *Discovery[T]) Stop(_ context.Context) error {
         x.cancel()
     }
     // 关闭所有 gRPC 客户端连接
-    x.nGrpcMap.Range(func(key, value interface{}) bool {
+    x.nGrpcMap.Range(func(key, value any) bool {
         if grpcClient, ok := value.(*grpc.ClientConn); ok {
             _ = grpcClient.Close()
         }
