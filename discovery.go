@@ -43,9 +43,9 @@ func NewDiscovery[T IDType](opts ...DiscoveryOption) *Discovery[T] {
     }
     ctx, cancel := context.WithCancel(o.ctx)
     return &Discovery[T]{
+        opts:   o,
         ctx:    ctx,
         cancel: cancel,
-        opts:   o,
     }
 }
 
