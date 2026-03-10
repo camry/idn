@@ -30,9 +30,9 @@ func NewNode(opts ...NodeOption) *Node {
     }
     ctx, cancel := context.WithCancel(o.ctx)
     return &Node{
+        opts:   o,
         ctx:    ctx,
         cancel: cancel,
-        opts:   o,
     }
 }
 
