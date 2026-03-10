@@ -112,12 +112,12 @@ func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
 }
 
 // Start 启动发现服务
-func (x *Discovery[T]) Start(ctx context.Context) error {
+func (x *Discovery[T]) Start(_ context.Context) error {
     if x.opts.etcdClient == nil {
         return gerror.Newf("Discovery Start NodeName %s etcd client is nil", x.opts.nodeName)
     }
     // 初始化所有服务节点
-    resp, err := x.opts.etcdClient.Get(ctx, fmt.Sprintf(DiscoveryServiceKey, x.opts.nodeName), clientv3.WithPrefix())
+    resp, err := x.opts.etcdClient.Get(x.ctx, fmt.Sprintf(DiscoveryServiceKey, x.opts.nodeName), clientv3.WithPrefix())
     if err != nil {
         return gerror.Wrapf(err, "Discovery Start NodeName %s DiscoveryServiceKey Get etcd error", x.opts.nodeName)
     }
@@ -131,7 +131,7 @@ func (x *Discovery[T]) Start(ctx context.Context) error {
         x.ncMap.Store(nc.ID, nc)
     }
     // 初始化所有 ID 映射和节点 gRPC 客户端连接映射
-    resp, err = x.opts.etcdClient.Get(ctx, fmt.Sprintf(DiscoveryMappingsKey, x.opts.nodeName), clientv3.WithPrefix())
+    resp, err = x.opts.etcdClient.Get(x.ctx, fmt.Sprintf(DiscoveryMappingsKey, x.opts.nodeName), clientv3.WithPrefix())
     if err != nil {
         return gerror.Wrapf(err, "Discovery Start NodeName %s DiscoveryMappingsKey Get etcd error", x.opts.nodeName)
     }
@@ -168,7 +168,7 @@ func (x *Discovery[T]) Start(ctx context.Context) error {
 }
 
 // Stop 停止发现服务
-func (x *Discovery[T]) Stop(ctx context.Context) error {
+func (x *Discovery[T]) Stop(_ context.Context) error {
     if x.cancel != nil {
         x.cancel()
     }
