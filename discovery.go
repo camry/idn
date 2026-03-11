@@ -82,6 +82,13 @@ func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
     if minLoadNode == nil {
         return nil, gerror.Newf("Discovery GrpcClient NodeName %s no available nodes", x.opts.nodeName)
     }
+    x.mu.Lock()
+    defer x.mu.Unlock()
+    // 将更新后的 ID 映射配置写回 etcd
+    _, err := x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(IdMappingKey, x.opts.nodeName, id), minLoadNode.ID)
+    if err != nil {
+        return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s put node id %s etcd error", x.opts.nodeName, minLoadNode.ID)
+    }
     grpcClient, ok := x.nGrpcMap.Load(minLoadNode.ID)
     if !ok {
         // 创建 gRPC 客户端连接
@@ -96,13 +103,6 @@ func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
     x.imMap.Store(id, minLoadNode.ID)
     // 更新对应节点的负载值
     atomic.AddInt32(&minLoadNode.Load, 1)
-    x.mu.Lock()
-    defer x.mu.Unlock()
-    // 将更新后的 ID 映射配置写回 etcd
-    _, err := x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(IdMappingKey, x.opts.nodeName, id), minLoadNode.ID)
-    if err != nil {
-        return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s put node id %s etcd error", x.opts.nodeName, minLoadNode.ID)
-    }
     return grpcClient.(*grpc.ClientConn), nil
 }
 
