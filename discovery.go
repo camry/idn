@@ -61,6 +61,12 @@ func (x *Discovery[T]) newGrpcClient(nc *nodeConfig) (*grpc.ClientConn, error) {
 
 // GrpcClient 获取 ID 对应的 gRPC 客户端连接
 func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
+    if nodeId, ok := x.imMap.Load(id); ok {
+        if grpcClient, ok2 := x.nGrpcMap.Load(cast.ToString(nodeId)); ok2 {
+            return grpcClient.(*grpc.ClientConn), nil
+        }
+        return nil, gerror.Newf("Discovery GrpcClient NodeName %s ID %v node %s not found", x.opts.nodeName, id, nodeId)
+    }
     session, err := concurrency.NewSession(x.opts.etcdClient, concurrency.WithTTL(5))
     if err != nil {
         return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s ID %v new etcd session error", x.opts.nodeName, id)
@@ -75,7 +81,7 @@ func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
         if grpcClient, ok2 := x.nGrpcMap.Load(cast.ToString(nodeId)); ok2 {
             return grpcClient.(*grpc.ClientConn), nil
         }
-        return nil, gerror.Newf("Discovery GrpcClient NodeName %s ID %v node %s not found", x.opts.nodeName, id, nodeId)
+        return nil, gerror.Newf("Discovery GrpcClient NodeName %s ID %v node %s mutex not found", x.opts.nodeName, id, nodeId)
     }
     // 从节点字典中获取负载最小的节点
     var minLoadNode *nodeConfig
