@@ -62,7 +62,7 @@ func (x *Node) Start(_ context.Context) error {
         return gerror.Newf("Node Id %s NodeName %s Start etcd client is nil", x.opts.id, x.opts.name)
     }
     // 注册节点
-    nc := nodeConfig{
+    nc := &nodeConfig{
         ID:      x.opts.id,
         Name:    x.opts.name,
         Version: x.opts.version,
@@ -72,7 +72,7 @@ func (x *Node) Start(_ context.Context) error {
     if err != nil {
         return gerror.Wrapf(err, "Node Id %s NodeName %s Start marshal node config failed", x.opts.id, x.opts.name)
     }
-    _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(NodeServiceKey, x.opts.name, x.opts.id), string(v))
+    _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(ServiceKey, x.opts.name, x.opts.id), string(v))
     if err != nil {
         return gerror.Wrapf(err, "Node Id %s NodeName %s Start register to etcd failed", x.opts.id, x.opts.name)
     }
@@ -82,11 +82,12 @@ func (x *Node) Start(_ context.Context) error {
 // Stop 停止节点
 func (x *Node) Stop(_ context.Context) error {
     // 注销节点
-    nodeServiceKey := fmt.Sprintf(NodeServiceKey, x.opts.name, x.opts.id)
+    nodeServiceKey := fmt.Sprintf(ServiceKey, x.opts.name, x.opts.id)
     _, err := x.opts.etcdClient.Delete(x.ctx, nodeServiceKey)
     if err != nil {
-        return gerror.Wrapf(err, "Node Stop Id %s NodeName %s NodeServiceKey %s Delete etcd failed", x.opts.id, x.opts.name, nodeServiceKey)
+        return gerror.Wrapf(err, "Node Stop Id %s NodeName %s ServiceKey %s Delete etcd failed", x.opts.id, x.opts.name, nodeServiceKey)
     }
+    // 删除ID映射
     resp, err := x.opts.etcdClient.Get(x.ctx, fmt.Sprintf(DiscoveryMappingsKey, x.opts.name), clientv3.WithPrefix())
     if err != nil {
         return gerror.Wrapf(err, "Node Stop Id %s NodeName %s DiscoveryMappingsKey %s Get etcd failed", x.opts.id, x.opts.name, DiscoveryMappingsKey)
