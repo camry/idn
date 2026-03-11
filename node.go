@@ -88,16 +88,16 @@ func (x *Node) Stop(_ context.Context) error {
         return gerror.Wrapf(err, "Node Stop Id %s NodeName %s ServiceKey %s Delete etcd failed", x.opts.id, x.opts.name, nodeServiceKey)
     }
     // 删除ID映射
-    resp, err := x.opts.etcdClient.Get(x.ctx, fmt.Sprintf(DiscoveryMappingsKey, x.opts.name), clientv3.WithPrefix())
+    resp, err := x.opts.etcdClient.Get(x.ctx, fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.name), clientv3.WithPrefix())
     if err != nil {
-        return gerror.Wrapf(err, "Node Stop Id %s NodeName %s DiscoveryMappingsKey %s Get etcd failed", x.opts.id, x.opts.name, DiscoveryMappingsKey)
+        return gerror.Wrapf(err, "Node Stop Id %s NodeName %s DiscoveryMappingsPrefix %s Get etcd failed", x.opts.id, x.opts.name, DiscoveryMappingsPrefix)
     }
     for _, kv := range resp.Kvs {
         nodeId := cast.ToString(kv.Value)
         if nodeId == x.opts.id {
             _, err = x.opts.etcdClient.Delete(x.ctx, string(kv.Key))
             if err != nil {
-                return gerror.Wrapf(err, "Node Stop Id %s NodeName %s DiscoveryMappingsKey %s Delete etcd failed", x.opts.id, x.opts.name, kv.Key)
+                return gerror.Wrapf(err, "Node Stop Id %s NodeName %s DiscoveryMappingsPrefix %s Delete etcd failed", x.opts.id, x.opts.name, kv.Key)
             }
         }
     }
