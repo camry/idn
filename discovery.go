@@ -63,8 +63,7 @@ func (x *Discovery[T]) newGrpcClient(nc *nodeConfig) (*grpc.ClientConn, error) {
 
 // GrpcClient 获取 ID 对应的 gRPC 客户端连接
 func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
-    nodeId, ok := x.imMap.Load(id)
-    if ok {
+    if nodeId, ok := x.imMap.Load(id); ok {
         if grpcClient, ok2 := x.nGrpcMap.Load(cast.ToString(nodeId)); ok2 {
             return grpcClient.(*grpc.ClientConn), nil
         }
