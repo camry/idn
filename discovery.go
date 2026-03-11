@@ -66,7 +66,7 @@ func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
         return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s ID %v new etcd session error", x.opts.nodeName, id)
     }
     defer session.Close()
-    mu := concurrency.NewMutex(session, fmt.Sprintf(MutexPrefix, x.opts.nodeName))
+    mu := concurrency.NewMutex(session, fmt.Sprintf(MutexMappingPrefix, x.opts.nodeName))
     if err = mu.Lock(x.ctx); err != nil {
         return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s ID %v lock etcd mutex error", x.opts.nodeName, id)
     }
