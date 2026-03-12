@@ -13,13 +13,13 @@ import (
 )
 
 type Node struct {
-    opts   *nodeOptions
-    ctx    context.Context
-    cancel context.CancelFunc
+    opts   *nodeOptions       // 节点选项
+    ctx    context.Context    // 节点上下文
+    cancel context.CancelFunc // 节点取消函数
 }
 
 // NewNode 创建节点
-func NewNode(opts ...NodeOption) *Node {
+func NewNode(opts ...NodeOption) (*Node, error) {
     o := &nodeOptions{
         ctx: context.Background(),
     }
@@ -29,12 +29,18 @@ func NewNode(opts ...NodeOption) *Node {
     for _, opt := range opts {
         opt(o)
     }
+    if o.name == "" {
+        return nil, gerror.Newf("NewNode Id %s NodeName is empty", o.id)
+    }
+    if o.etcdClient == nil {
+        return nil, gerror.Newf("NewNode Id %s NodeName %s etcd client is nil", o.id, o.name)
+    }
     ctx, cancel := context.WithCancel(o.ctx)
     return &Node{
         opts:   o,
         ctx:    ctx,
         cancel: cancel,
-    }
+    }, nil
 }
 
 // ID 返回节点ID
@@ -59,16 +65,13 @@ func (x *Node) Addr() string {
 
 // Start 启动节点
 func (x *Node) Start(_ context.Context) error {
-    if x.opts.etcdClient == nil {
-        return gerror.Newf("Node Id %s NodeName %s Start etcd client is nil", x.opts.id, x.opts.name)
-    }
     session, err := concurrency.NewSession(x.opts.etcdClient, concurrency.WithTTL(5))
     if err != nil {
-        return gerror.Wrapf(err, "Node Id %s NodeName %s Start new etcd session error", x.opts.id, x.opts.name)
+        return gerror.Wrapf(err, "Node Id %s NodeName %s Start concurrency.NewSession failed", x.opts.id, x.opts.name)
     }
     defer session.Close()
     mu := concurrency.NewMutex(session, fmt.Sprintf(MutexServicePrefix, x.opts.name))
-    if err = mu.Lock(x.ctx); err != nil {
+    if err := mu.Lock(x.ctx); err != nil {
         return gerror.Wrapf(err, "Node Id %s NodeName %s Start lock etcd mutex error", x.opts.id, x.opts.name)
     }
     defer mu.Unlock(x.ctx)
@@ -94,13 +97,14 @@ func (x *Node) Start(_ context.Context) error {
 func (x *Node) Stop(_ context.Context) error {
     session, err := concurrency.NewSession(x.opts.etcdClient, concurrency.WithTTL(5))
     if err != nil {
-        return gerror.Wrapf(err, "Node Id %s NodeName %s Stop new etcd session error", x.opts.id, x.opts.name)
+        return gerror.Wrapf(err, "Node Id %s NodeName %s Stop concurrency.NewSession failed", x.opts.id, x.opts.name)
     }
     defer session.Close()
     mu := concurrency.NewMutex(session, fmt.Sprintf(MutexServicePrefix, x.opts.name))
     if err = mu.Lock(x.ctx); err != nil {
-        return gerror.Wrapf(err, "Node Id %s NodeName %s Stop lock etcd mutex error", x.opts.id, x.opts.name)
+        return gerror.Wrapf(err, "Node Id %s NodeName %s Stop lock etcd mutex failed", x.opts.id, x.opts.name)
     }
+    defer x.cancel()
     defer mu.Unlock(x.ctx)
     // 注销节点
     nodeServiceKey := fmt.Sprintf(ServiceKey, x.opts.name, x.opts.id)
@@ -121,9 +125,6 @@ func (x *Node) Stop(_ context.Context) error {
                 return gerror.Wrapf(err, "Node Stop Id %s NodeName %s DiscoveryMappingsPrefix %s Delete etcd failed", x.opts.id, x.opts.name, kv.Key)
             }
         }
-    }
-    if x.cancel != nil {
-        x.cancel()
     }
     return nil
 }

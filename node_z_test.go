@@ -10,6 +10,7 @@ import (
     "github.com/camry/dove/v2/server"
     "github.com/camry/g/v2/glog"
     "github.com/camry/g/v2/gnet/gipv4"
+    "github.com/stretchr/testify/assert"
     clientv3 "go.etcd.io/etcd/client/v3"
 
     "gitea.meigushi.go/meigushi/idn"
@@ -35,12 +36,13 @@ func TestNewNode(t *testing.T) {
 
     servers := make([]server.Server, 0, 5)
     for i := 1; i <= 5; i++ {
-        ns := idn.NewNode(
+        ns, err1 := idn.NewNode(
             idn.NodeName("guild"),
             idn.NodeVersion("1.0.0"),
             idn.NodeAddr(fmt.Sprintf("%s:%d", intranetIp, 6000+i)),
             idn.NodeEtcdClient(etcdClient),
         )
+        assert.NoError(t, err1)
         servers = append(servers, ns)
     }
 

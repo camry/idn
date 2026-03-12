@@ -29,7 +29,7 @@ type Discovery[T IDType] struct {
 }
 
 // NewDiscovery 创建发现服务
-func NewDiscovery[T IDType](opts ...DiscoveryOption) *Discovery[T] {
+func NewDiscovery[T IDType](opts ...DiscoveryOption) (*Discovery[T], error) {
     o := &discoveryOptions{
         ctx: context.Background(),
     }
@@ -42,19 +42,25 @@ func NewDiscovery[T IDType](opts ...DiscoveryOption) *Discovery[T] {
             grpc.WithTransportCredentials(insecure.NewCredentials()),
         }
     }
+    if o.nodeName == "" {
+        return nil, gerror.Newf("NewDiscovery NodeName %s is empty", o.nodeName)
+    }
+    if o.etcdClient == nil {
+        return nil, gerror.Newf("NewDiscovery NodeName %s etcd client is nil", o.nodeName)
+    }
     ctx, cancel := context.WithCancel(o.ctx)
     return &Discovery[T]{
         opts:   o,
         ctx:    ctx,
         cancel: cancel,
-    }
+    }, nil
 }
 
 // newGrpcClient 创建 gRPC 客户端连接
 func (x *Discovery[T]) newGrpcClient(nc *nodeConfig) (*grpc.ClientConn, error) {
     grpcClient, err := grpc.NewClient(nc.Addr, x.opts.grpcDialOptions...)
     if err != nil {
-        return nil, gerror.Wrapf(err, "Discovery newGrpcClient NodeName %s grpc.NewClient Addr %s dial error", x.opts.nodeName, nc.Addr)
+        return nil, gerror.Wrapf(err, "Discovery newGrpcClient NodeName %s grpc.NewClient Addr %s dial failed", x.opts.nodeName, nc.Addr)
     }
     return grpcClient, nil
 }
@@ -69,12 +75,12 @@ func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
     }
     session, err := concurrency.NewSession(x.opts.etcdClient, concurrency.WithTTL(5))
     if err != nil {
-        return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s ID %v new etcd session error", x.opts.nodeName, id)
+        return nil, gerror.Wrapf(err, "NewDiscovery NodeName %s concurrency.NewSession failed", x.opts.nodeName)
     }
     defer session.Close()
     mu := concurrency.NewMutex(session, fmt.Sprintf(MutexMappingPrefix, x.opts.nodeName))
-    if err = mu.Lock(x.ctx); err != nil {
-        return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s ID %v lock etcd mutex error", x.opts.nodeName, id)
+    if err := mu.Lock(x.ctx); err != nil {
+        return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s ID %v lock etcd mutex failed", x.opts.nodeName, id)
     }
     defer mu.Unlock(x.ctx)
     if nodeId, ok := x.imMap.Load(id); ok {
@@ -101,7 +107,7 @@ func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
         // 创建 gRPC 客户端连接
         grpcClientNew, err := x.newGrpcClient(minLoadNode)
         if err != nil {
-            return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s ID %v node %s newGrpcClient Failed", x.opts.nodeName, id, minLoadNode.ID)
+            return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s ID %v node %s newGrpcClient failed", x.opts.nodeName, id, minLoadNode.ID)
         }
         grpcClient = grpcClientNew
         x.nGrpcMap.Store(minLoadNode.ID, grpcClient)
@@ -113,7 +119,7 @@ func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
     // 将更新后的 ID 映射配置写回 etcd
     _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(IdMappingKey, x.opts.nodeName, id), minLoadNode.ID)
     if err != nil {
-        return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s put node id %s etcd error", x.opts.nodeName, minLoadNode.ID)
+        return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s put node id %s etcd failed", x.opts.nodeName, minLoadNode.ID)
     }
     glog.Debugf("Discovery GrpcClient NodeName %s ID %v node %s Load %d put etcd success", x.opts.nodeName, id, minLoadNode.ID, minLoadNode.Load)
     return grpcClient.(*grpc.ClientConn), nil
@@ -133,11 +139,11 @@ func (x *Discovery[T]) Start(_ context.Context) error {
         nc := &nodeConfig{}
         err = json.Unmarshal(kv.Value, nc)
         if err != nil {
-            return gerror.Wrapf(err, "Discovery Start NodeName %s DiscoveryServicesPrefix Key %s Value %s Unmarshal etcd error", x.opts.nodeName, kv.Key, kv.Value)
+            return gerror.Wrapf(err, "Discovery Start NodeName %s DiscoveryServicesPrefix Key %s Value %s Unmarshal etcd failed", x.opts.nodeName, kv.Key, kv.Value)
         }
         grpcClient, err1 := x.newGrpcClient(nc)
         if err1 != nil {
-            return gerror.Wrapf(err1, "Discovery Start NodeName %s DiscoveryMappingsPrefix Key %s Value %s newGrpcClient Failed", x.opts.nodeName, kv.Key, kv.Value)
+            return gerror.Wrapf(err1, "Discovery Start NodeName %s DiscoveryMappingsPrefix Key %s Value %s newGrpcClient failed", x.opts.nodeName, kv.Key, kv.Value)
         }
         x.nGrpcMap.Store(nc.ID, grpcClient)
         x.ncMap.Store(nc.ID, nc)
@@ -146,12 +152,12 @@ func (x *Discovery[T]) Start(_ context.Context) error {
     // 初始化所有 ID 映射
     resp, err = x.opts.etcdClient.Get(x.ctx, fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.nodeName), clientv3.WithPrefix())
     if err != nil {
-        return gerror.Wrapf(err, "Discovery Start NodeName %s DiscoveryMappingsPrefix Get etcd error", x.opts.nodeName)
+        return gerror.Wrapf(err, "Discovery Start NodeName %s DiscoveryMappingsPrefix Get etcd failed", x.opts.nodeName)
     }
     for _, kv := range resp.Kvs {
         idV, ok := lo.Last(strings.Split(string(kv.Key), "/"))
         if !ok {
-            return gerror.Newf("Discovery Start NodeName %s DiscoveryMappingsPrefix Key %s Last Split error", x.opts.nodeName, kv.Key)
+            return gerror.Newf("Discovery Start NodeName %s DiscoveryMappingsPrefix Key %s Last Split failed", x.opts.nodeName, kv.Key)
         }
         id := cast.To[T](idV)
         nodeId := cast.ToString(kv.Value)
@@ -206,9 +212,10 @@ func (x *Discovery[T]) watchServiceNode() {
             return
         case response := <-x.opts.etcdClient.Watch(x.ctx, key, clientv3.WithPrefix()):
             if response.Err() != nil {
-                glog.Error(gerror.Wrapf(response.Err(), "Discovery watchServiceNode NodeName %s Watch etcd error", x.opts.nodeName))
+                glog.Error(gerror.Wrapf(response.Err(), "Discovery watchServiceNode NodeName %s Watch etcd failed", x.opts.nodeName))
                 // 短暂延迟后重试
                 time.Sleep(time.Second)
+                continue
             }
             // 处理每个事件
             for _, event := range response.Events {
@@ -219,14 +226,14 @@ func (x *Discovery[T]) watchServiceNode() {
                     nc := &nodeConfig{}
                     err := json.Unmarshal(event.Kv.Value, nc)
                     if err != nil {
-                        glog.Error(gerror.Wrapf(err, "Discovery watchServiceNode NodeName %s Key %s Value %s Unmarshal etcd error", x.opts.nodeName, event.Kv.Key, event.Kv.Value))
+                        glog.Error(gerror.Wrapf(err, "Discovery watchServiceNode NodeName %s Key %s Value %s Unmarshal etcd failed", x.opts.nodeName, event.Kv.Key, event.Kv.Value))
                         continue
                     }
                     x.ncMap.Store(nc.ID, nc)
                     // 创建 gRPC 客户端连接
                     grpcClient, err := x.newGrpcClient(nc)
                     if err != nil {
-                        glog.Error(gerror.Wrapf(err, "Discovery watchServiceNode NodeName %s Key %s Value %s newGrpcClient Failed", x.opts.nodeName, event.Kv.Key, event.Kv.Value))
+                        glog.Error(gerror.Wrapf(err, "Discovery watchServiceNode NodeName %s Key %s Value %s newGrpcClient failed", x.opts.nodeName, event.Kv.Key, event.Kv.Value))
                         continue
                     }
                     x.nGrpcMap.Store(nc.ID, grpcClient)
@@ -235,7 +242,7 @@ func (x *Discovery[T]) watchServiceNode() {
                     // 处理键被删除的逻辑
                     nodeId, ok := lo.Last(strings.Split(string(event.Kv.Key), "/"))
                     if !ok {
-                        glog.Error(gerror.Newf("Discovery watchServiceNode NodeName %s Key %s Last Split error", x.opts.nodeName, event.Kv.Key))
+                        glog.Error(gerror.Newf("Discovery watchServiceNode NodeName %s Key %s Last Split failed", x.opts.nodeName, event.Kv.Key))
                         continue
                     }
                     x.imMap.Range(func(key, value any) bool {
@@ -269,9 +276,10 @@ func (x *Discovery[T]) watchIDMapping() {
             return
         case response := <-x.opts.etcdClient.Watch(x.ctx, key, clientv3.WithPrefix()):
             if response.Err() != nil {
-                glog.Error(gerror.Wrapf(response.Err(), "Discovery watchIDMapping NodeName %s Watch etcd error", x.opts.nodeName))
+                glog.Error(gerror.Wrapf(response.Err(), "Discovery watchIDMapping NodeName %s Watch etcd failed", x.opts.nodeName))
                 // 短暂延迟后重试
                 time.Sleep(time.Second)
+                continue
             }
             // 处理每个事件
             for _, event := range response.Events {
@@ -281,7 +289,7 @@ func (x *Discovery[T]) watchIDMapping() {
                     // 处理键被添加或更新的逻辑
                     idV, ok := lo.Last(strings.Split(string(event.Kv.Key), "/"))
                     if !ok {
-                        glog.Error(gerror.Newf("Discovery watchIDMapping NodeName %s Key %s Last Split error", x.opts.nodeName, event.Kv.Key))
+                        glog.Error(gerror.Newf("Discovery watchIDMapping NodeName %s Key %s Last Split failed", x.opts.nodeName, event.Kv.Key))
                         continue
                     }
                     id := cast.To[T](idV)
@@ -300,7 +308,7 @@ func (x *Discovery[T]) watchIDMapping() {
                     if !ok {
                         grpcClient, err := x.newGrpcClient(nc)
                         if err != nil {
-                            glog.Error(gerror.Wrapf(err, "Discovery watchIDMapping NodeName %s Key %s Value %s newGrpcClient Failed", x.opts.nodeName, event.Kv.Key, event.Kv.Value))
+                            glog.Error(gerror.Wrapf(err, "Discovery watchIDMapping NodeName %s Key %s Value %s newGrpcClient failed", x.opts.nodeName, event.Kv.Key, event.Kv.Value))
                             continue
                         }
                         x.nGrpcMap.Store(nodeId, grpcClient)
