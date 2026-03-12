@@ -9,7 +9,6 @@ import (
     "github.com/google/uuid"
     "github.com/spf13/cast"
     clientv3 "go.etcd.io/etcd/client/v3"
-    "go.etcd.io/etcd/client/v3/concurrency"
 )
 
 type Node struct {
@@ -65,16 +64,6 @@ func (x *Node) Addr() string {
 
 // Start 启动节点
 func (x *Node) Start(_ context.Context) error {
-    session, err := concurrency.NewSession(x.opts.etcdClient, concurrency.WithTTL(5))
-    if err != nil {
-        return gerror.Wrapf(err, "Node Id %s NodeName %s Start concurrency.NewSession failed", x.opts.id, x.opts.name)
-    }
-    defer session.Close()
-    mu := concurrency.NewMutex(session, fmt.Sprintf(MutexServicePrefix, x.opts.name))
-    if err := mu.Lock(x.ctx); err != nil {
-        return gerror.Wrapf(err, "Node Id %s NodeName %s Start lock etcd mutex error", x.opts.id, x.opts.name)
-    }
-    defer mu.Unlock(x.ctx)
     // 注册节点
     nc := &nodeConfig{
         ID:      x.opts.id,
@@ -95,20 +84,9 @@ func (x *Node) Start(_ context.Context) error {
 
 // Stop 停止节点
 func (x *Node) Stop(_ context.Context) error {
-    session, err := concurrency.NewSession(x.opts.etcdClient, concurrency.WithTTL(5))
-    if err != nil {
-        return gerror.Wrapf(err, "Node Id %s NodeName %s Stop concurrency.NewSession failed", x.opts.id, x.opts.name)
-    }
-    defer session.Close()
-    mu := concurrency.NewMutex(session, fmt.Sprintf(MutexServicePrefix, x.opts.name))
-    if err = mu.Lock(x.ctx); err != nil {
-        return gerror.Wrapf(err, "Node Id %s NodeName %s Stop lock etcd mutex failed", x.opts.id, x.opts.name)
-    }
-    defer x.cancel()
-    defer mu.Unlock(x.ctx)
     // 注销节点
     nodeServiceKey := fmt.Sprintf(ServiceKey, x.opts.name, x.opts.id)
-    _, err = x.opts.etcdClient.Delete(x.ctx, nodeServiceKey)
+    _, err := x.opts.etcdClient.Delete(x.ctx, nodeServiceKey)
     if err != nil {
         return gerror.Wrapf(err, "Node Stop Id %s NodeName %s ServiceKey %s Delete etcd failed", x.opts.id, x.opts.name, nodeServiceKey)
     }
