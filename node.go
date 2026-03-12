@@ -91,9 +91,10 @@ func (x *Node) Stop(_ context.Context) error {
         return gerror.Wrapf(err, "Node Stop Id %s NodeName %s ServiceKey %s Delete etcd failed", x.opts.id, x.opts.name, nodeServiceKey)
     }
     // 删除ID映射
-    resp, err := x.opts.etcdClient.Get(x.ctx, fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.name), clientv3.WithPrefix())
+    discoveryMappingsPrefixKey := fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.name)
+    resp, err := x.opts.etcdClient.Get(x.ctx, discoveryMappingsPrefixKey, clientv3.WithPrefix())
     if err != nil {
-        return gerror.Wrapf(err, "Node Stop Id %s NodeName %s DiscoveryMappingsPrefix %s Get etcd failed", x.opts.id, x.opts.name, DiscoveryMappingsPrefix)
+        return gerror.Wrapf(err, "Node Stop Id %s NodeName %s DiscoveryMappingsPrefix %s Get etcd failed", x.opts.id, x.opts.name, discoveryMappingsPrefixKey)
     }
     for _, kv := range resp.Kvs {
         nodeId := cast.ToString(kv.Value)
