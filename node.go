@@ -19,7 +19,7 @@ type Node[T IDType] struct {
     opts             *nodeOptions       // 节点选项
     ctx              context.Context    // 节点上下文
     cancel           context.CancelFunc // 节点取消函数
-    callRemoveIdFunc func(id T) error   // 节点回调删除ID函数
+    callRemoveIDFunc func(id T) error   // 节点回调删除ID函数
 }
 
 // NewNode 创建节点
@@ -34,10 +34,10 @@ func NewNode[T IDType](opts ...NodeOption) (*Node[T], error) {
         opt(o)
     }
     if o.name == "" {
-        return nil, gerror.Newf("NewNode Id %s NodeName is empty", o.id)
+        return nil, gerror.Newf("NewNode ID %s NodeName is empty", o.id)
     }
     if o.etcdClient == nil {
-        return nil, gerror.Newf("NewNode Id %s NodeName %s etcd client is nil", o.id, o.name)
+        return nil, gerror.Newf("NewNode ID %s NodeName %s etcd client is nil", o.id, o.name)
     }
     ctx, cancel := context.WithCancel(o.ctx)
     return &Node[T]{
@@ -78,11 +78,11 @@ func (x *Node[T]) Start(_ context.Context) error {
     }
     v, err := json.Marshal(nc)
     if err != nil {
-        return gerror.Wrapf(err, "Node Id %s NodeName %s Start marshal node config failed", x.opts.id, x.opts.name)
+        return gerror.Wrapf(err, "Node ID %s NodeName %s Start marshal node config failed", x.opts.id, x.opts.name)
     }
     _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(ServiceKey, x.opts.name, x.opts.id), string(v))
     if err != nil {
-        return gerror.Wrapf(err, "Node Id %s NodeName %s Start register to etcd failed", x.opts.id, x.opts.name)
+        return gerror.Wrapf(err, "Node ID %s NodeName %s Start register to etcd failed", x.opts.id, x.opts.name)
     }
     var wg sync.WaitGroup
     wg.Go(x.watchIDMapping)
@@ -97,29 +97,29 @@ func (x *Node[T]) Stop(_ context.Context) error {
     nodeServiceKey := fmt.Sprintf(ServiceKey, x.opts.name, x.opts.id)
     _, err := x.opts.etcdClient.Delete(x.ctx, nodeServiceKey)
     if err != nil {
-        return gerror.Wrapf(err, "Node Stop Id %s NodeName %s ServiceKey %s Delete etcd failed", x.opts.id, x.opts.name, nodeServiceKey)
+        return gerror.Wrapf(err, "Node Stop ID %s NodeName %s ServiceKey %s Delete etcd failed", x.opts.id, x.opts.name, nodeServiceKey)
     }
     // 删除ID映射
     discoveryMappingsPrefixKey := fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.name)
     resp, err := x.opts.etcdClient.Get(x.ctx, discoveryMappingsPrefixKey, clientv3.WithPrefix())
     if err != nil {
-        return gerror.Wrapf(err, "Node Stop Id %s NodeName %s DiscoveryMappingsPrefix %s Get etcd failed", x.opts.id, x.opts.name, discoveryMappingsPrefixKey)
+        return gerror.Wrapf(err, "Node Stop ID %s NodeName %s DiscoveryMappingsPrefix %s Get etcd failed", x.opts.id, x.opts.name, discoveryMappingsPrefixKey)
     }
     for _, kv := range resp.Kvs {
-        nodeId := cast.ToString(kv.Value)
-        if nodeId == x.opts.id {
+        nodeID := cast.ToString(kv.Value)
+        if nodeID == x.opts.id {
             _, err = x.opts.etcdClient.Delete(x.ctx, string(kv.Key))
             if err != nil {
-                return gerror.Wrapf(err, "Node Stop Id %s NodeName %s DiscoveryMappingsPrefix %s Delete etcd failed", x.opts.id, x.opts.name, kv.Key)
+                return gerror.Wrapf(err, "Node Stop ID %s NodeName %s DiscoveryMappingsPrefix %s Delete etcd failed", x.opts.id, x.opts.name, kv.Key)
             }
         }
     }
     return nil
 }
 
-// SetCallRemoveIdFunc 设置节点回调删除ID函数
-func (x *Node[T]) SetCallRemoveIdFunc(f func(id T) error) {
-    x.callRemoveIdFunc = f
+// SetCallRemoveIDFunc 设置节点回调删除ID函数
+func (x *Node[T]) SetCallRemoveIDFunc(f func(id T) error) {
+    x.callRemoveIDFunc = f
 }
 
 // watchIDMapping 监听 ID 映射
@@ -128,16 +128,16 @@ func (x *Node[T]) watchIDMapping() {
     for {
         select {
         case <-x.ctx.Done():
-            glog.Debugf("Node watchIDMapping NodeName %s NodeId %s Watch context canceled", x.opts.name, x.opts.id)
+            glog.Debugf("Node watchIDMapping NodeName %s NodeID %s Watch context canceled", x.opts.name, x.opts.id)
             return
         default:
             for response := range watchChan {
                 for _, event := range response.Events {
                     switch event.Type {
                     case clientv3.EventTypeDelete:
-                        glog.Debugf("Node watchIDMapping NodeName %s NodeId %s Key %s Value %s deleted", x.opts.name, x.opts.id, event.Kv.Key, event.PrevKv.Value)
-                        nodeId := cast.ToString(event.PrevKv.Value)
-                        if nodeId == x.opts.id {
+                        glog.Debugf("Node watchIDMapping NodeName %s NodeID %s Key %s Value %s deleted", x.opts.name, x.opts.id, event.Kv.Key, event.PrevKv.Value)
+                        nodeID := cast.ToString(event.PrevKv.Value)
+                        if nodeID == x.opts.id {
                             // 处理键被删除的逻辑
                             idV, ok := lo.Last(strings.Split(string(event.Kv.Key), "/"))
                             if !ok {
@@ -145,8 +145,8 @@ func (x *Node[T]) watchIDMapping() {
                                 continue
                             }
                             id := cast.To[T](idV)
-                            if x.callRemoveIdFunc != nil {
-                                err := x.callRemoveIdFunc(id)
+                            if x.callRemoveIDFunc != nil {
+                                err := x.callRemoveIDFunc(id)
                                 if err != nil {
                                     glog.Error(gerror.Wrapf(err, "Node watchIDMapping NodeName %s Key %s Delete failed", x.opts.name, event.Kv.Key))
                                 }

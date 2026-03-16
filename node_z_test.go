@@ -43,7 +43,7 @@ func TestNewNode(t *testing.T) {
             idn.NodeEtcdClient(etcdClient),
         )
         assert.NoError(t, err1)
-        ns.SetCallRemoveIdFunc(func(id int32) error {
+        ns.SetCallRemoveIDFunc(func(id int32) error {
             glog.Debugf("remove id %d", id)
             return nil
         })
