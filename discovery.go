@@ -33,7 +33,7 @@ func NewDiscovery[T IDType](opts ...DiscoveryOption) (*Discovery[T], error) {
     o := &discoveryOptions{
         ctx:        context.Background(),
         sessionTTL: 3,
-        leaseTTL:   5,
+        leaseTTL:   3600,
     }
     for _, opt := range opts {
         opt(o)

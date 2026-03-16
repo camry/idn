@@ -26,6 +26,8 @@ func TestNewDiscovery(t *testing.T) {
         ds, err1 := idn.NewDiscovery[int32](
             idn.DiscoveryNodeName("guild"),
             idn.DiscoveryEtcdClient(etcdClient),
+            idn.DiscoverySessionTTL(3),
+            idn.DiscoverySessionTTL(5),
         )
         assert.NoError(t, err1)
         servers = append(servers, ds)
