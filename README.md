@@ -31,6 +31,7 @@ import (
 
     "github.com/camry/dove/v2"
     "github.com/camry/dove/v2/server"
+    "github.com/camry/g/v2/glog"
     "github.com/camry/g/v2/gnet/gipv4"
     clientv3 "go.etcd.io/etcd/client/v3"
 
@@ -54,12 +55,20 @@ func main() {
     }
 
     // 创建节点服务
-    ns := idn.NewNode(
+    ns, err := idn.NewNode[int32](
         idn.NodeName("guild"),
         idn.NodeVersion("1.0.0"),
         idn.NodeAddr(fmt.Sprintf("%s:%d", intranetIp, 6001)),
         idn.NodeEtcdClient(etcdClient),
     )
+    if err != nil {
+        panic(err)
+    }
+
+    ns.SetCallRemoveIDFunc(func(id int32) error {
+        glog.Debugf("ns remove id %d", id)
+        return nil
+    })
 
     // 创建并运行 dove 应用
     app := dove.New(
@@ -101,10 +110,14 @@ func main() {
     }
 
     // 创建发现服务
-    ds := idn.NewDiscovery[int32](
+    ds,err := idn.NewDiscovery[int32](
         idn.DiscoveryNodeName("guild"),
         idn.DiscoveryEtcdClient(etcdClient),
+        idn.DiscoveryLeaseTTL(5),
     )
+    if err != nil {
+        panic(err)
+    }
 
     // 创建并运行 dove 应用
     app := dove.New(
