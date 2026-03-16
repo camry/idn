@@ -33,7 +33,6 @@ func NewDiscovery[T IDType](opts ...DiscoveryOption) (*Discovery[T], error) {
     o := &discoveryOptions{
         ctx:        context.Background(),
         sessionTTL: 3,
-        leaseTTL:   3600,
     }
     for _, opt := range opts {
         opt(o)
@@ -50,17 +49,20 @@ func NewDiscovery[T IDType](opts ...DiscoveryOption) (*Discovery[T], error) {
     if o.etcdClient == nil {
         return nil, gerror.Newf("NewDiscovery NodeName %s etcd client is nil", o.nodeName)
     }
-    leaseGrantResponse, err := o.etcdClient.Grant(o.ctx, o.leaseTTL)
-    if err != nil {
-        return nil, gerror.Newf("NewDiscovery Grant: %v", err)
-    }
     ctx, cancel := context.WithCancel(o.ctx)
-    return &Discovery[T]{
-        opts:               o,
-        ctx:                ctx,
-        cancel:             cancel,
-        leaseGrantResponse: leaseGrantResponse,
-    }, nil
+    discovery := &Discovery[T]{
+        opts:   o,
+        ctx:    ctx,
+        cancel: cancel,
+    }
+    if o.leaseTTL > 0 {
+        leaseGrantResponse, err := o.etcdClient.Grant(ctx, o.leaseTTL)
+        if err != nil {
+            return nil, gerror.Wrapf(err, "NewDiscovery etcdClient.Grant failed")
+        }
+        discovery.leaseGrantResponse = leaseGrantResponse
+    }
+    return discovery, nil
 }
 
 // newGrpcClient 创建 gRPC 客户端连接
@@ -120,7 +122,11 @@ func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
         x.nGrpcMap.Store(minLoadNode.ID, grpcClient)
     }
     // 将更新后的 ID 映射配置写回 etcd
-    _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(IDMappingKey, x.opts.nodeName, id), minLoadNode.ID, clientv3.WithLease(x.leaseGrantResponse.ID))
+    var opOptions []clientv3.OpOption
+    if x.leaseGrantResponse != nil {
+        opOptions = append(opOptions, clientv3.WithLease(x.leaseGrantResponse.ID))
+    }
+    _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(IDMappingKey, x.opts.nodeName, id), minLoadNode.ID, opOptions...)
     if err != nil {
         return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s put node id %s etcd failed", x.opts.nodeName, minLoadNode.ID)
     }

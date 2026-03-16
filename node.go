@@ -117,6 +117,24 @@ func (x *Node[T]) Stop(_ context.Context) error {
     return nil
 }
 
+// BindID 绑定ID
+func (x *Node[T]) BindID(id T) error {
+    _, err := x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(IDMappingKey, x.opts.name, id), x.opts.id)
+    if err != nil {
+        return gerror.Wrapf(err, "Node BindID ID %s NodeName %s put id %s etcd failed", x.opts.id, x.opts.name, id)
+    }
+    return nil
+}
+
+// UnbindID 解绑ID
+func (x *Node[T]) UnbindID(id T) error {
+    _, err := x.opts.etcdClient.Delete(x.ctx, fmt.Sprintf(IDMappingKey, x.opts.name, id))
+    if err != nil {
+        return gerror.Wrapf(err, "Node UnbindID ID %s NodeName %s delete id %s etcd failed", x.opts.id, x.opts.name, id)
+    }
+    return nil
+}
+
 // SetCallRemoveIDFunc 设置节点回调删除ID函数
 func (x *Node[T]) SetCallRemoveIDFunc(f func(id T) error) {
     x.callRemoveIDFunc = f
