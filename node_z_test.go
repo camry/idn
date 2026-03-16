@@ -36,13 +36,17 @@ func TestNewNode(t *testing.T) {
 
     servers := make([]server.Server, 0, 5)
     for i := 1; i <= 5; i++ {
-        ns, err1 := idn.NewNode(
+        ns, err1 := idn.NewNode[int32](
             idn.NodeName("guild"),
             idn.NodeVersion("1.0.0"),
             idn.NodeAddr(fmt.Sprintf("%s:%d", intranetIp, 6000+i)),
             idn.NodeEtcdClient(etcdClient),
         )
         assert.NoError(t, err1)
+        ns.SetCallRemoveIdFunc(func(id int32) error {
+            glog.Debugf("remove id %d", id)
+            return nil
+        })
         servers = append(servers, ns)
     }
 
