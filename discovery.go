@@ -74,6 +74,12 @@ func (x *Discovery[T]) newGrpcClient(nc *nodeConfig) (*grpc.ClientConn, error) {
     return grpcClient, nil
 }
 
+// HasNodeBindID 是否存在节点绑定ID
+func (x *Discovery[T]) HasNodeBindID(id T) bool {
+    _, ok := x.imMap.Load(id)
+    return ok
+}
+
 // GrpcClient 获取 ID 对应的 gRPC 客户端连接
 func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
     if nodeID, ok := x.imMap.Load(id); ok {
@@ -82,13 +88,16 @@ func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
         }
         return nil, gerror.Newf("Discovery GrpcClient NodeName %s ID %v node %s not found", x.opts.nodeName, id, nodeID)
     }
+    if x.opts.isNodeBind {
+        return nil, gerror.Newf("Discovery GrpcClient NodeName %s ID %v not found", x.opts.nodeName, id)
+    }
     session, err := concurrency.NewSession(x.opts.etcdClient, concurrency.WithTTL(x.opts.sessionTTL))
     if err != nil {
         return nil, gerror.Wrapf(err, "NewDiscovery NodeName %s concurrency.NewSession failed", x.opts.nodeName)
     }
     defer session.Close()
     mu := concurrency.NewMutex(session, fmt.Sprintf(MutexMappingPrefix, x.opts.nodeName))
-    if err := mu.Lock(x.ctx); err != nil {
+    if err = mu.Lock(x.ctx); err != nil {
         return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s ID %v lock etcd mutex failed", x.opts.nodeName, id)
     }
     defer mu.Unlock(x.ctx)

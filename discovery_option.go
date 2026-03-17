@@ -16,6 +16,7 @@ type discoveryOptions struct {
     grpcDialOptions []grpc.DialOption
     sessionTTL      int
     leaseTTL        int64
+    isNodeBind      bool
 }
 
 // DiscoveryNodeName 设置发现服务节点名称
@@ -46,4 +47,9 @@ func DiscoverySessionTTL(ttl int) DiscoveryOption {
 // DiscoveryLeaseTTL 设置发现服务租约 TTL (单位: 秒)
 func DiscoveryLeaseTTL(ttl int64) DiscoveryOption {
     return func(o *discoveryOptions) { o.leaseTTL = ttl }
+}
+
+// DiscoveryIsNodeBind 设置发现服务是否节点绑定
+func DiscoveryIsNodeBind(isNodeBind bool) DiscoveryOption {
+    return func(o *discoveryOptions) { o.isNodeBind = isNodeBind }
 }
