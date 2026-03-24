@@ -20,6 +20,7 @@ type Node[T IDType] struct {
     ctx              context.Context    // 节点上下文
     cancel           context.CancelFunc // 节点取消函数
     callRemoveIDFunc func(id T) error   // 节点回调删除ID函数
+    isStopped        bool               // 节点是否停止
 }
 
 // NewNode 创建节点
@@ -92,6 +93,7 @@ func (x *Node[T]) Start(_ context.Context) error {
 
 // Stop 停止节点
 func (x *Node[T]) Stop(_ context.Context) error {
+    x.isStopped = true
     defer x.cancel()
     // 注销节点
     nodeServiceKey := fmt.Sprintf(ServiceKey, x.opts.name, x.opts.id)
@@ -119,6 +121,9 @@ func (x *Node[T]) Stop(_ context.Context) error {
 
 // BindID 绑定ID
 func (x *Node[T]) BindID(id T) error {
+    if x.isStopped {
+        return gerror.Newf("Node BindID ID %s NodeName %s is stopped", x.opts.id, x.opts.name)
+    }
     _, err := x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(IDMappingKey, x.opts.name, id), x.opts.id)
     if err != nil {
         return gerror.Wrapf(err, "Node BindID ID %s NodeName %s put id %s etcd failed", x.opts.id, x.opts.name, id)
