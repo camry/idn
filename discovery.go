@@ -172,30 +172,47 @@ func (x *Discovery[T]) Start(_ context.Context) error {
         glog.Debugf("Discovery Start NodeName %s DiscoveryServicesPrefix Key %s Value %s", x.opts.nodeName, kv.Key, kv.Value)
     }
     // 初始化所有 ID 映射
-    resp, err = x.opts.etcdClient.Get(x.ctx, fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.nodeName), clientv3.WithPrefix())
-    if err != nil {
-        return gerror.Wrapf(err, "Discovery Start NodeName %s DiscoveryMappingsPrefix Get etcd failed", x.opts.nodeName)
-    }
-    for _, kv := range resp.Kvs {
-        idV, ok := lo.Last(strings.Split(string(kv.Key), "/"))
-        if !ok {
-            return gerror.Newf("Discovery Start NodeName %s DiscoveryMappingsPrefix Key %s Last Split failed", x.opts.nodeName, kv.Key)
+    discoveryMappingsPrefixKey := fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.nodeName)
+    batchSize := 100
+    startKey := discoveryMappingsPrefixKey
+    endKey := clientv3.GetPrefixRangeEnd(discoveryMappingsPrefixKey)
+    for {
+        resp, err = x.opts.etcdClient.Get(x.ctx, startKey,
+            clientv3.WithLimit(int64(batchSize)),
+            clientv3.WithRange(endKey),
+            clientv3.WithSort(clientv3.SortByKey, clientv3.SortAscend),
+        )
+        if err != nil {
+            return gerror.Wrapf(err, "Discovery Start NodeName %s DiscoveryMappingsPrefix Get etcd failed", x.opts.nodeName)
         }
-        id := cast.To[T](idV)
-        nodeID := cast.ToString(kv.Value)
-        ncV, ok := x.ncMap.Load(nodeID)
-        if !ok {
-            return gerror.Newf("Discovery Start NodeName %s DiscoveryMappingsPrefix Key %s Value %s node %s not found", x.opts.nodeName, kv.Key, kv.Value, nodeID)
+        for _, kv := range resp.Kvs {
+            idV, ok := lo.Last(strings.Split(string(kv.Key), "/"))
+            if !ok {
+                return gerror.Newf("Discovery Start NodeName %s DiscoveryMappingsPrefix Key %s Last Split failed", x.opts.nodeName, kv.Key)
+            }
+            id := cast.To[T](idV)
+            nodeID := cast.ToString(kv.Value)
+            ncV, ok := x.ncMap.Load(nodeID)
+            if !ok {
+                return gerror.Newf("Discovery Start NodeName %s DiscoveryMappingsPrefix Key %s Value %s node %s not found", x.opts.nodeName, kv.Key, kv.Value, nodeID)
+            }
+            nc, ok := ncV.(*nodeConfig)
+            if !ok {
+                return gerror.Newf("Discovery Start NodeName %s DiscoveryMappingsPrefix Key %s Value %s node %s not match", x.opts.nodeName, kv.Key, kv.Value, nodeID)
+            }
+            if nc.ID == nodeID {
+                atomic.AddInt32(&nc.Load, 1)
+            }
+            x.imMap.Store(id, nodeID)
+            glog.Debugf("Discovery Start NodeName %s DiscoveryMappingsPrefix Key %s Value %s", x.opts.nodeName, kv.Key, kv.Value)
         }
-        nc, ok := ncV.(*nodeConfig)
-        if !ok {
-            return gerror.Newf("Discovery Start NodeName %s DiscoveryMappingsPrefix Key %s Value %s node %s not match", x.opts.nodeName, kv.Key, kv.Value, nodeID)
+        if !resp.More {
+            break
         }
-        if nc.ID == nodeID {
-            atomic.AddInt32(&nc.Load, 1)
+        lastKV, ok := lo.Last(resp.Kvs)
+        if ok {
+            startKey = string(append(lastKV.Key, 0))
         }
-        x.imMap.Store(id, nodeID)
-        glog.Debugf("Discovery Start NodeName %s DiscoveryMappingsPrefix Key %s Value %s", x.opts.nodeName, kv.Key, kv.Value)
     }
     var wg sync.WaitGroup
     // 协程监听服务节点

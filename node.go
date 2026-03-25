@@ -6,6 +6,7 @@ import (
     "fmt"
     "strings"
     "sync"
+    "time"
 
     "github.com/camry/g/v2/gerrors/gerror"
     "github.com/camry/g/v2/glog"
@@ -103,47 +104,43 @@ func (x *Node[T]) Stop(_ context.Context) error {
     }
     // 删除ID映射
     discoveryMappingsPrefixKey := fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.name)
-    isFromKey := false
-    batchSize := 1000
-
+    batchSize := 100
+    startKey := discoveryMappingsPrefixKey
+    endKey := clientv3.GetPrefixRangeEnd(discoveryMappingsPrefixKey)
     for {
-        opts := []clientv3.OpOption{
+        resp, err1 := x.opts.etcdClient.Get(x.ctx, startKey,
             clientv3.WithLimit(int64(batchSize)),
-        }
-        if isFromKey {
-            opts = append(opts, clientv3.WithFromKey())
-        } else {
-            opts = append(opts, clientv3.WithPrefix())
-        }
-        resp, err1 := x.opts.etcdClient.Get(x.ctx, discoveryMappingsPrefixKey, opts...)
+            clientv3.WithRange(endKey),
+            clientv3.WithSort(clientv3.SortByKey, clientv3.SortAscend),
+        )
         if err1 != nil {
             return gerror.Wrapf(err1, "Node Stop ID %s NodeName %s DiscoveryMappingsPrefix %s Get etcd failed", x.opts.id, x.opts.name, discoveryMappingsPrefixKey)
         }
-        var keysToDelete []string
+        var opDeleteList []clientv3.Op
         for _, kv := range resp.Kvs {
             nodeID := cast.ToString(kv.Value)
             if nodeID == x.opts.id {
-                keysToDelete = append(keysToDelete, string(kv.Key))
+                opDeleteList = append(opDeleteList, clientv3.OpDelete(string(kv.Key)))
             }
         }
-        if len(keysToDelete) > 0 {
-            startKey, ok1 := lo.First(keysToDelete)
-            endKey, ok2 := lo.Last(keysToDelete)
-            if ok1 && ok2 {
-                _, err = x.opts.etcdClient.Delete(x.ctx, startKey, clientv3.WithRange(clientv3.GetPrefixRangeEnd(endKey)))
-                if err != nil {
-                    return gerror.Wrapf(err, "Node Stop ID %s NodeName %s DiscoveryMappingsPrefix %s Delete etcd failed", x.opts.id, x.opts.name, discoveryMappingsPrefixKey)
-                }
+        if len(opDeleteList) > 0 {
+            ctx, cancel := context.WithTimeout(x.ctx, 5*time.Second)
+            _, err = x.opts.etcdClient.Txn(ctx).Then(opDeleteList...).Commit()
+            cancel()
+            if err != nil {
+                return gerror.Wrapf(err, "Node Stop ID %s NodeName %s DiscoveryMappingsPrefix %s Delete etcd failed", x.opts.id, x.opts.name, discoveryMappingsPrefixKey)
             }
         }
         if !resp.More {
             break
         }
-        if !isFromKey {
-            isFromKey = true
+        lastKV, ok := lo.Last(resp.Kvs)
+        if ok {
+            startKey = string(append(lastKV.Key, 0))
         }
     }
-
+    // 等待5秒，确保所有删除操作生效
+    time.Sleep(time.Second * 5)
     return nil
 }
 
