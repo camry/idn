@@ -8,6 +8,10 @@ const (
     ServiceKey              = "/idn/nodes/%s/service/%s"    // 节点服务键
 )
 
+const (
+    DefaultLimit = int64(1000) // 默认批量操作限制
+)
+
 type IDType interface {
     int32 | int64 | uint32 | uint64 | string
 }

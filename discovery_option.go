@@ -17,6 +17,7 @@ type discoveryOptions struct {
     sessionTTL      int
     leaseTTL        int64
     isNodeBind      bool
+    limit           int64 // 批量操作限制
 }
 
 // DiscoveryNodeName 设置发现服务节点名称
@@ -52,4 +53,9 @@ func DiscoveryLeaseTTL(ttl int64) DiscoveryOption {
 // DiscoveryIsNodeBind 设置发现服务是否节点绑定
 func DiscoveryIsNodeBind(isNodeBind bool) DiscoveryOption {
     return func(o *discoveryOptions) { o.isNodeBind = isNodeBind }
+}
+
+// DiscoveryLimit 设置发现服务批量操作限制
+func DiscoveryLimit(limit int64) DiscoveryOption {
+    return func(o *discoveryOptions) { o.limit = limit }
 }

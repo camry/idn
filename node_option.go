@@ -15,6 +15,7 @@ type nodeOptions struct {
     addr       string
     ctx        context.Context
     etcdClient *clientv3.Client
+    limit      int64 // 批量操作限制
 }
 
 // NodeID 设置节点ID
@@ -45,4 +46,9 @@ func NodeCtx(ctx context.Context) NodeOption {
 // NodeEtcdClient 设置节点 etcd 客户端
 func NodeEtcdClient(c *clientv3.Client) NodeOption {
     return func(o *nodeOptions) { o.etcdClient = c }
+}
+
+// NodeLimit 设置节点批量操作限制
+func NodeLimit(limit int64) NodeOption {
+    return func(o *nodeOptions) { o.limit = limit }
 }

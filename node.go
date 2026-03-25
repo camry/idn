@@ -27,7 +27,8 @@ type Node[T IDType] struct {
 // NewNode 创建节点
 func NewNode[T IDType](opts ...NodeOption) (*Node[T], error) {
     o := &nodeOptions{
-        ctx: context.Background(),
+        ctx:   context.Background(),
+        limit: DefaultLimit,
     }
     if id, err := uuid.NewUUID(); err == nil {
         o.id = id.String()
@@ -104,12 +105,11 @@ func (x *Node[T]) Stop(_ context.Context) error {
     }
     // 删除ID映射
     discoveryMappingsPrefixKey := fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.name)
-    batchSize := 100
     startKey := discoveryMappingsPrefixKey
     endKey := clientv3.GetPrefixRangeEnd(discoveryMappingsPrefixKey)
     for {
         resp, err1 := x.opts.etcdClient.Get(x.ctx, startKey,
-            clientv3.WithLimit(int64(batchSize)),
+            clientv3.WithLimit(x.opts.limit),
             clientv3.WithRange(endKey),
             clientv3.WithSort(clientv3.SortByKey, clientv3.SortAscend),
         )
@@ -124,12 +124,24 @@ func (x *Node[T]) Stop(_ context.Context) error {
             }
         }
         if len(opDeleteList) > 0 {
-            ctx, cancel := context.WithTimeout(x.ctx, 5*time.Second)
-            _, err = x.opts.etcdClient.Txn(ctx).Then(opDeleteList...).Commit()
-            cancel()
-            if err != nil {
-                return gerror.Wrapf(err, "Node Stop ID %s NodeName %s DiscoveryMappingsPrefix %s Delete etcd failed", x.opts.id, x.opts.name, discoveryMappingsPrefixKey)
+            chunkOpDeleteList := lo.Chunk(opDeleteList, 100)
+            var (
+                wg sync.WaitGroup
+                ch = make(chan struct{}, 10)
+            )
+            for _, opDeleteListV := range chunkOpDeleteList {
+                wg.Go(func() {
+                    ch <- struct{}{}
+                    ctx, cancel := context.WithTimeout(x.ctx, 5*time.Second)
+                    _, err = x.opts.etcdClient.Txn(ctx).Then(opDeleteListV...).Commit()
+                    cancel()
+                    if err != nil {
+                        glog.Error(gerror.Wrapf(err, "Node Stop ID %s NodeName %s DiscoveryMappingsPrefix %s Delete etcd failed", x.opts.id, x.opts.name, discoveryMappingsPrefixKey))
+                    }
+                    <-ch
+                })
             }
+            wg.Wait()
         }
         if !resp.More {
             break
@@ -139,8 +151,8 @@ func (x *Node[T]) Stop(_ context.Context) error {
             startKey = string(append(lastKV.Key, 0))
         }
     }
-    // 等待5秒，确保所有删除操作生效
-    time.Sleep(time.Second * 5)
+    // 等待3秒，确保所有删除操作生效
+    time.Sleep(time.Second * 3)
     return nil
 }
 

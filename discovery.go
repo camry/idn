@@ -33,6 +33,7 @@ func NewDiscovery[T IDType](opts ...DiscoveryOption) (*Discovery[T], error) {
     o := &discoveryOptions{
         ctx:        context.Background(),
         sessionTTL: 3,
+        limit:      DefaultLimit,
     }
     for _, opt := range opts {
         opt(o)
@@ -173,12 +174,11 @@ func (x *Discovery[T]) Start(_ context.Context) error {
     }
     // 初始化所有 ID 映射
     discoveryMappingsPrefixKey := fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.nodeName)
-    batchSize := 100
     startKey := discoveryMappingsPrefixKey
     endKey := clientv3.GetPrefixRangeEnd(discoveryMappingsPrefixKey)
     for {
         resp, err = x.opts.etcdClient.Get(x.ctx, startKey,
-            clientv3.WithLimit(int64(batchSize)),
+            clientv3.WithLimit(x.opts.limit),
             clientv3.WithRange(endKey),
             clientv3.WithSort(clientv3.SortByKey, clientv3.SortAscend),
         )
