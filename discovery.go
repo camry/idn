@@ -205,10 +205,11 @@ func (x *Discovery[T]) Start(_ context.Context) error {
             if !ok {
                 return gerror.Newf("Discovery Start NodeName %s DiscoveryMappingsPrefix Key %s Value %s node %s not match", x.opts.nodeName, kv.Key, kv.Value, nodeID)
             }
-            if nc.ID == nodeID {
+            _, ok = x.imMap.Load(id)
+            if !ok {
                 atomic.AddInt32(&nc.Load, 1)
+                x.imMap.Store(id, nodeID)
             }
-            x.imMap.Store(id, nodeID)
             glog.Debugf("Discovery Start NodeName %s DiscoveryMappingsPrefix Key %s Value %s", x.opts.nodeName, kv.Key, kv.Value)
         }
         if !resp.More {
