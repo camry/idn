@@ -103,19 +103,47 @@ func (x *Node[T]) Stop(_ context.Context) error {
     }
     // 删除ID映射
     discoveryMappingsPrefixKey := fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.name)
-    resp, err := x.opts.etcdClient.Get(x.ctx, discoveryMappingsPrefixKey, clientv3.WithPrefix())
-    if err != nil {
-        return gerror.Wrapf(err, "Node Stop ID %s NodeName %s DiscoveryMappingsPrefix %s Get etcd failed", x.opts.id, x.opts.name, discoveryMappingsPrefixKey)
-    }
-    for _, kv := range resp.Kvs {
-        nodeID := cast.ToString(kv.Value)
-        if nodeID == x.opts.id {
-            _, err = x.opts.etcdClient.Delete(x.ctx, string(kv.Key))
-            if err != nil {
-                return gerror.Wrapf(err, "Node Stop ID %s NodeName %s DiscoveryMappingsPrefix %s Delete etcd failed", x.opts.id, x.opts.name, kv.Key)
+    isFromKey := false
+    batchSize := 1000
+
+    for {
+        opts := []clientv3.OpOption{
+            clientv3.WithLimit(int64(batchSize)),
+        }
+        if isFromKey {
+            opts = append(opts, clientv3.WithFromKey())
+        } else {
+            opts = append(opts, clientv3.WithPrefix())
+        }
+        resp, err1 := x.opts.etcdClient.Get(x.ctx, discoveryMappingsPrefixKey, opts...)
+        if err1 != nil {
+            return gerror.Wrapf(err1, "Node Stop ID %s NodeName %s DiscoveryMappingsPrefix %s Get etcd failed", x.opts.id, x.opts.name, discoveryMappingsPrefixKey)
+        }
+        var keysToDelete []string
+        for _, kv := range resp.Kvs {
+            nodeID := cast.ToString(kv.Value)
+            if nodeID == x.opts.id {
+                keysToDelete = append(keysToDelete, string(kv.Key))
             }
         }
+        if len(keysToDelete) > 0 {
+            startKey, ok1 := lo.First(keysToDelete)
+            endKey, ok2 := lo.Last(keysToDelete)
+            if ok1 && ok2 {
+                _, err = x.opts.etcdClient.Delete(x.ctx, startKey, clientv3.WithRange(clientv3.GetPrefixRangeEnd(endKey)))
+                if err != nil {
+                    return gerror.Wrapf(err, "Node Stop ID %s NodeName %s DiscoveryMappingsPrefix %s Delete etcd failed", x.opts.id, x.opts.name, discoveryMappingsPrefixKey)
+                }
+            }
+        }
+        if !resp.More {
+            break
+        }
+        if !isFromKey {
+            isFromKey = true
+        }
     }
+
     return nil
 }
 
