@@ -153,6 +153,11 @@ func (x *Discovery[T]) Start(_ context.Context) error {
     if x.opts.etcdClient == nil {
         return gerror.Newf("Discovery Start NodeName %s etcd client is nil", x.opts.nodeName)
     }
+    var wg sync.WaitGroup
+    // 协程监听服务节点
+    wg.Go(x.watchServiceNode)
+    // 协程监听 ID 映射
+    wg.Go(x.watchIDMapping)
     // 初始化所有服务节点和节点 gRPC 客户端连接映射
     resp, err := x.opts.etcdClient.Get(x.ctx, fmt.Sprintf(DiscoveryServicesPrefix, x.opts.nodeName), clientv3.WithPrefix())
     if err != nil {
@@ -214,11 +219,6 @@ func (x *Discovery[T]) Start(_ context.Context) error {
             startKey = string(append(lastKV.Key, 0))
         }
     }
-    var wg sync.WaitGroup
-    // 协程监听服务节点
-    wg.Go(x.watchServiceNode)
-    // 协程监听 ID 映射
-    wg.Go(x.watchIDMapping)
     wg.Wait()
     return nil
 }

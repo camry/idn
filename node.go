@@ -72,6 +72,8 @@ func (x *Node[T]) Addr() string {
 
 // Start 启动节点
 func (x *Node[T]) Start(_ context.Context) error {
+    var wg sync.WaitGroup
+    wg.Go(x.watchIDMapping)
     // 注册节点
     nc := &nodeConfig{
         ID:      x.opts.id,
@@ -87,8 +89,6 @@ func (x *Node[T]) Start(_ context.Context) error {
     if err != nil {
         return gerror.Wrapf(err, "Node ID %s NodeName %s Start register to etcd failed", x.opts.id, x.opts.name)
     }
-    var wg sync.WaitGroup
-    wg.Go(x.watchIDMapping)
     wg.Wait()
     return nil
 }
