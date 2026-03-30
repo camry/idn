@@ -72,6 +72,7 @@ func (x *Node[T]) Addr() string {
 
 // Start 启动节点
 func (x *Node[T]) Start(_ context.Context) error {
+    glog.Infof("[NODE] %s server starting", x.Name())
     var wg sync.WaitGroup
     wg.Go(x.watchIDMapping)
     // 注册节点
@@ -95,6 +96,7 @@ func (x *Node[T]) Start(_ context.Context) error {
 
 // Stop 停止节点
 func (x *Node[T]) Stop(_ context.Context) error {
+    glog.Infof("[NODE] %s server stopping", x.Name())
     x.isStopped = true
     defer x.cancel()
     // 注销节点

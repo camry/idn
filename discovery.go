@@ -150,6 +150,7 @@ func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
 
 // Start 启动发现服务
 func (x *Discovery[T]) Start(_ context.Context) error {
+    glog.Infof("[DISCOVERY] node %s server starting", x.opts.nodeName)
     if x.opts.etcdClient == nil {
         return gerror.Newf("Discovery Start NodeName %s etcd client is nil", x.opts.nodeName)
     }
@@ -226,6 +227,7 @@ func (x *Discovery[T]) Start(_ context.Context) error {
 
 // Stop 停止发现服务
 func (x *Discovery[T]) Stop(_ context.Context) error {
+    glog.Infof("[DISCOVERY] node %s server stopping", x.opts.nodeName)
     defer x.cancel()
     // 关闭所有 gRPC 客户端连接
     x.nGrpcMap.Range(func(key, value any) bool {
