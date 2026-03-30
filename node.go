@@ -86,7 +86,7 @@ func (x *Node[T]) Start(_ context.Context) error {
     if err != nil {
         return gerror.Wrapf(err, "Node ID %s NodeName %s Start marshal node config failed", x.opts.id, x.opts.name)
     }
-    _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(ServiceKey, x.opts.name, x.opts.id), string(v))
+    _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(ServiceKey, x.opts.keyPrefix, x.opts.name, x.opts.id), string(v))
     if err != nil {
         return gerror.Wrapf(err, "Node ID %s NodeName %s Start register to etcd failed", x.opts.id, x.opts.name)
     }
@@ -100,13 +100,13 @@ func (x *Node[T]) Stop(_ context.Context) error {
     x.isStopped = true
     defer x.cancel()
     // 注销节点
-    nodeServiceKey := fmt.Sprintf(ServiceKey, x.opts.name, x.opts.id)
+    nodeServiceKey := fmt.Sprintf(ServiceKey, x.opts.keyPrefix, x.opts.name, x.opts.id)
     _, err := x.opts.etcdClient.Delete(x.ctx, nodeServiceKey)
     if err != nil {
         return gerror.Wrapf(err, "Node Stop ID %s NodeName %s ServiceKey %s Delete etcd failed", x.opts.id, x.opts.name, nodeServiceKey)
     }
     // 删除ID映射
-    discoveryMappingsPrefixKey := fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.name)
+    discoveryMappingsPrefixKey := fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.keyPrefix, x.opts.name)
     startKey := discoveryMappingsPrefixKey
     endKey := clientv3.GetPrefixRangeEnd(discoveryMappingsPrefixKey)
     for {
@@ -163,7 +163,7 @@ func (x *Node[T]) BindID(id T) error {
     if x.isStopped {
         return gerror.Newf("Node BindID ID %s NodeName %s is stopped", x.opts.id, x.opts.name)
     }
-    _, err := x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(IDMappingKey, x.opts.name, id), x.opts.id)
+    _, err := x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(IDMappingKey, x.opts.keyPrefix, x.opts.name, id), x.opts.id)
     if err != nil {
         return gerror.Wrapf(err, "Node BindID ID %s NodeName %s put id %s etcd failed", x.opts.id, x.opts.name, id)
     }
@@ -172,7 +172,7 @@ func (x *Node[T]) BindID(id T) error {
 
 // UnbindID 解绑ID
 func (x *Node[T]) UnbindID(id T) error {
-    _, err := x.opts.etcdClient.Delete(x.ctx, fmt.Sprintf(IDMappingKey, x.opts.name, id))
+    _, err := x.opts.etcdClient.Delete(x.ctx, fmt.Sprintf(IDMappingKey, x.opts.keyPrefix, x.opts.name, id))
     if err != nil {
         return gerror.Wrapf(err, "Node UnbindID ID %s NodeName %s delete id %s etcd failed", x.opts.id, x.opts.name, id)
     }
@@ -186,7 +186,7 @@ func (x *Node[T]) SetCallRemoveIDFunc(f func(id T) error) {
 
 // watchIDMapping 监听 ID 映射
 func (x *Node[T]) watchIDMapping() {
-    watchChan := x.opts.etcdClient.Watch(x.ctx, fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.name), clientv3.WithPrefix(), clientv3.WithPrevKV())
+    watchChan := x.opts.etcdClient.Watch(x.ctx, fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.keyPrefix, x.opts.name), clientv3.WithPrefix(), clientv3.WithPrevKV())
     for {
         select {
         case <-x.ctx.Done():

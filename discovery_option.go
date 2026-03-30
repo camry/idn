@@ -17,7 +17,8 @@ type discoveryOptions struct {
     sessionTTL      int
     leaseTTL        int64
     isNodeBind      bool
-    limit           int64 // 批量操作限制
+    limit           int64
+    keyPrefix       string
 }
 
 // DiscoveryNodeName 设置发现服务节点名称
@@ -58,4 +59,9 @@ func DiscoveryIsNodeBind(isNodeBind bool) DiscoveryOption {
 // DiscoveryLimit 设置发现服务批量操作限制
 func DiscoveryLimit(limit int64) DiscoveryOption {
     return func(o *discoveryOptions) { o.limit = limit }
+}
+
+// DiscoveryKeyPrefix 设置发现服务 KEY 前缀。
+func DiscoveryKeyPrefix(keyPrefix string) DiscoveryOption {
+    return func(o *discoveryOptions) { o.keyPrefix = keyPrefix }
 }

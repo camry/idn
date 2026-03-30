@@ -97,7 +97,7 @@ func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
         return nil, gerror.Wrapf(err, "NewDiscovery NodeName %s concurrency.NewSession failed", x.opts.nodeName)
     }
     defer session.Close()
-    mu := concurrency.NewMutex(session, fmt.Sprintf(MutexMappingPrefix, x.opts.nodeName))
+    mu := concurrency.NewMutex(session, fmt.Sprintf(MutexMappingPrefix, x.opts.keyPrefix, x.opts.nodeName))
     if err = mu.Lock(x.ctx); err != nil {
         return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s ID %v lock etcd mutex failed", x.opts.nodeName, id)
     }
@@ -136,7 +136,7 @@ func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
     if x.leaseGrantResponse != nil {
         opOptions = append(opOptions, clientv3.WithLease(x.leaseGrantResponse.ID))
     }
-    _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(IDMappingKey, x.opts.nodeName, id), minLoadNode.ID, opOptions...)
+    _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(IDMappingKey, x.opts.keyPrefix, x.opts.nodeName, id), minLoadNode.ID, opOptions...)
     if err != nil {
         return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s put node id %s etcd failed", x.opts.nodeName, minLoadNode.ID)
     }
@@ -160,7 +160,7 @@ func (x *Discovery[T]) Start(_ context.Context) error {
     // 协程监听 ID 映射
     wg.Go(x.watchIDMapping)
     // 初始化所有服务节点和节点 gRPC 客户端连接映射
-    resp, err := x.opts.etcdClient.Get(x.ctx, fmt.Sprintf(DiscoveryServicesPrefix, x.opts.nodeName), clientv3.WithPrefix())
+    resp, err := x.opts.etcdClient.Get(x.ctx, fmt.Sprintf(DiscoveryServicesPrefix, x.opts.keyPrefix, x.opts.nodeName), clientv3.WithPrefix())
     if err != nil {
         return gerror.Wrapf(err, "Discovery Start NodeName %s DiscoveryServicesPrefix Get etcd error", x.opts.nodeName)
     }
@@ -179,7 +179,7 @@ func (x *Discovery[T]) Start(_ context.Context) error {
         glog.Debugf("Discovery Start NodeName %s DiscoveryServicesPrefix Key %s Value %s", x.opts.nodeName, kv.Key, kv.Value)
     }
     // 初始化所有 ID 映射
-    discoveryMappingsPrefixKey := fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.nodeName)
+    discoveryMappingsPrefixKey := fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.keyPrefix, x.opts.nodeName)
     startKey := discoveryMappingsPrefixKey
     endKey := clientv3.GetPrefixRangeEnd(discoveryMappingsPrefixKey)
     for {
@@ -244,7 +244,7 @@ func (x *Discovery[T]) Stop(_ context.Context) error {
 
 // watchServiceNode 监听服务节点
 func (x *Discovery[T]) watchServiceNode() {
-    watchChan := x.opts.etcdClient.Watch(x.ctx, fmt.Sprintf(DiscoveryServicesPrefix, x.opts.nodeName), clientv3.WithPrefix())
+    watchChan := x.opts.etcdClient.Watch(x.ctx, fmt.Sprintf(DiscoveryServicesPrefix, x.opts.keyPrefix, x.opts.nodeName), clientv3.WithPrefix())
     for {
         select {
         case <-x.ctx.Done():
@@ -312,7 +312,7 @@ func (x *Discovery[T]) watchServiceNode() {
 
 // watchIDMapping 监听 ID 映射
 func (x *Discovery[T]) watchIDMapping() {
-    watchChan := x.opts.etcdClient.Watch(x.ctx, fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.nodeName), clientv3.WithPrefix())
+    watchChan := x.opts.etcdClient.Watch(x.ctx, fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.keyPrefix, x.opts.nodeName), clientv3.WithPrefix())
     for {
         select {
         case <-x.ctx.Done():
