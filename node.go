@@ -27,8 +27,9 @@ type Node[T IDType] struct {
 // NewNode 创建节点
 func NewNode[T IDType](opts ...NodeOption) (*Node[T], error) {
     o := &nodeOptions{
-        ctx:   context.Background(),
-        limit: DefaultLimit,
+        ctx:          context.Background(),
+        limit:        DefaultLimit,
+        stopDuration: time.Second * 5,
     }
     if id, err := uuid.NewUUID(); err == nil {
         o.id = id.String()
@@ -154,7 +155,7 @@ func (x *Node[T]) Stop(_ context.Context) error {
         }
     }
     // 等待3秒，确保所有删除操作生效
-    time.Sleep(time.Second * 3)
+    time.Sleep(x.opts.stopDuration)
     return nil
 }
 

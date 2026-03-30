@@ -2,6 +2,7 @@ package idn
 
 import (
     "context"
+    "time"
 
     clientv3 "go.etcd.io/etcd/client/v3"
 )
@@ -9,14 +10,15 @@ import (
 type NodeOption func(o *nodeOptions)
 
 type nodeOptions struct {
-    id         string
-    name       string
-    version    string
-    addr       string
-    ctx        context.Context
-    etcdClient *clientv3.Client
-    limit      int64
-    keyPrefix  string
+    id           string
+    name         string
+    version      string
+    addr         string
+    ctx          context.Context
+    etcdClient   *clientv3.Client
+    limit        int64
+    keyPrefix    string
+    stopDuration time.Duration
 }
 
 // NodeID 设置节点ID
@@ -57,4 +59,9 @@ func NodeLimit(limit int64) NodeOption {
 // NodeKeyPrefix 设置节点 KEY 前缀。
 func NodeKeyPrefix(keyPrefix string) NodeOption {
     return func(o *nodeOptions) { o.keyPrefix = keyPrefix }
+}
+
+// NodeStopDuration 设置节点停止等待时间。
+func NodeStopDuration(stopDuration time.Duration) NodeOption {
+    return func(o *nodeOptions) { o.stopDuration = stopDuration }
 }
