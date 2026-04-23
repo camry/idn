@@ -13,6 +13,8 @@ type nodeOptions struct {
     id           string
     name         string
     version      string
+    buildTime    string
+    buildCommit  string
     addr         string
     ctx          context.Context
     etcdClient   *clientv3.Client
@@ -34,6 +36,16 @@ func NodeName(name string) NodeOption {
 // NodeVersion 设置节点版本
 func NodeVersion(version string) NodeOption {
     return func(o *nodeOptions) { o.version = version }
+}
+
+// NodeBuildTime 设置节点构建时间
+func NodeBuildTime(buildTime string) NodeOption {
+    return func(o *nodeOptions) { o.buildTime = buildTime }
+}
+
+// NodeBuildCommit 设置节点构建提交
+func NodeBuildCommit(buildCommit string) NodeOption {
+    return func(o *nodeOptions) { o.buildCommit = buildCommit }
 }
 
 // NodeAddr 设置节点地址

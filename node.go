@@ -78,10 +78,12 @@ func (x *Node[T]) Start(_ context.Context) error {
     wg.Go(x.watchIDMapping)
     // 注册节点
     nc := &nodeConfig{
-        ID:      x.opts.id,
-        Name:    x.opts.name,
-        Version: x.opts.version,
-        Addr:    x.opts.addr,
+        ID:          x.opts.id,
+        Name:        x.opts.name,
+        Version:     x.opts.version,
+        BuildTime:   x.opts.buildTime,
+        BuildCommit: x.opts.buildCommit,
+        Addr:        x.opts.addr,
     }
     v, err := json.Marshal(nc)
     if err != nil {
@@ -166,7 +168,7 @@ func (x *Node[T]) BindID(id T) error {
     }
     _, err := x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(IDMappingKey, x.opts.keyPrefix, x.opts.name, id), x.opts.id)
     if err != nil {
-        return gerror.Wrapf(err, "Node BindID ID %s NodeName %s put id %s etcd failed", x.opts.id, x.opts.name, id)
+        return gerror.Wrapf(err, "Node BindID ID %s NodeName %s put id %v etcd failed", x.opts.id, x.opts.name, id)
     }
     return nil
 }
@@ -175,7 +177,7 @@ func (x *Node[T]) BindID(id T) error {
 func (x *Node[T]) UnbindID(id T) error {
     _, err := x.opts.etcdClient.Delete(x.ctx, fmt.Sprintf(IDMappingKey, x.opts.keyPrefix, x.opts.name, id))
     if err != nil {
-        return gerror.Wrapf(err, "Node UnbindID ID %s NodeName %s delete id %s etcd failed", x.opts.id, x.opts.name, id)
+        return gerror.Wrapf(err, "Node UnbindID ID %s NodeName %s delete id %v etcd failed", x.opts.id, x.opts.name, id)
     }
     return nil
 }

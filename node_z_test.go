@@ -39,6 +39,8 @@ func TestNewNode(t *testing.T) {
         ns, err1 := idn.NewNode[int32](
             idn.NodeName("guild"),
             idn.NodeVersion("1.0.0"),
+            idn.NodeBuildTime("2026-04-23 17:30:00"),
+            idn.NodeBuildCommit("Git Latest Commit Hash"),
             idn.NodeAddr(fmt.Sprintf("%s:%d", intranetIp, 6000+i)),
             idn.NodeEtcdClient(etcdClient),
         )
