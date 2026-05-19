@@ -68,17 +68,24 @@ func NewDiscovery[T IDType](opts ...DiscoveryOption) (*Discovery[T], error) {
 
 // newGrpcClient 创建 gRPC 客户端连接
 func (x *Discovery[T]) newGrpcClient(nc *nodeConfig) (*grpc.ClientConn, error) {
-    grpcClient, err := grpc.NewClient(nc.Addr, x.opts.grpcDialOptions...)
+    grpcClient, err := grpc.NewClient(nc.GetGRPCAddr(), x.opts.grpcDialOptions...)
     if err != nil {
-        return nil, gerror.Wrapf(err, "Discovery newGrpcClient NodeName %s grpc.NewClient Addr %s dial failed", x.opts.nodeName, nc.Addr)
+        return nil, gerror.Wrapf(err, "Discovery newGrpcClient NodeName %s grpc.NewClient Addr %s dial failed", x.opts.nodeName, nc.GetGRPCAddr())
     }
     return grpcClient, nil
 }
 
-// HasNodeBindID 是否存在节点绑定ID
-func (x *Discovery[T]) HasNodeBindID(id T) bool {
-    _, ok := x.imMap.Load(id)
-    return ok
+// IDNode 获取 ID 对应的节点配置
+func (x *Discovery[T]) IDNode(id T) (INodeConfig, bool) {
+    nodeID, ok := x.imMap.Load(id)
+    if !ok {
+        return nil, false
+    }
+    nc, ok := x.ncMap.Load(cast.ToString(nodeID))
+    if !ok {
+        return nil, false
+    }
+    return nc.(*nodeConfig), ok
 }
 
 // GrpcClient 获取 ID 对应的 gRPC 客户端连接

@@ -15,3 +15,15 @@ const (
 type IDType interface {
     int32 | int64 | uint32 | uint64 | string
 }
+
+type INodeConfig interface {
+    GetID() string
+    GetName() string
+    GetVersion() string
+    GetBuildTime() string
+    GetBuildCommit() string
+    GetHTTPAddr() string
+    GetGRPCAddr() string
+    GetTCPAddr() string
+    GetLoad() int32
+}

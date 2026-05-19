@@ -15,7 +15,9 @@ type nodeOptions struct {
     version      string
     buildTime    string
     buildCommit  string
-    addr         string
+    httpAddr     string
+    grpcAddr     string
+    tcpAddr      string
     ctx          context.Context
     etcdClient   *clientv3.Client
     limit        int64
@@ -48,9 +50,19 @@ func NodeBuildCommit(buildCommit string) NodeOption {
     return func(o *nodeOptions) { o.buildCommit = buildCommit }
 }
 
-// NodeAddr 设置节点地址
-func NodeAddr(addr string) NodeOption {
-    return func(o *nodeOptions) { o.addr = addr }
+// NodeHTTPAddr 设置节点 HTTP 地址
+func NodeHTTPAddr(httpAddr string) NodeOption {
+    return func(o *nodeOptions) { o.httpAddr = httpAddr }
+}
+
+// NodeGRPCAddr 设置节点 GRPC 地址
+func NodeGRPCAddr(grpcAddr string) NodeOption {
+    return func(o *nodeOptions) { o.grpcAddr = grpcAddr }
+}
+
+// NodeTCPAddr 设置节点 TCP 地址
+func NodeTCPAddr(tcpAddr string) NodeOption {
+    return func(o *nodeOptions) { o.tcpAddr = tcpAddr }
 }
 
 // NodeCtx 设置节点上下文

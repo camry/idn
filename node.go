@@ -68,7 +68,7 @@ func (x *Node[T]) Version() string {
 
 // Addr 返回节点地址
 func (x *Node[T]) Addr() string {
-    return x.opts.addr
+    return x.opts.grpcAddr
 }
 
 // Start 启动节点
@@ -83,7 +83,9 @@ func (x *Node[T]) Start(_ context.Context) error {
         Version:     x.opts.version,
         BuildTime:   x.opts.buildTime,
         BuildCommit: x.opts.buildCommit,
-        Addr:        x.opts.addr,
+        HTTPAddr:    x.opts.httpAddr,
+        GRPCAddr:    x.opts.grpcAddr,
+        TCPAddr:     x.opts.tcpAddr,
     }
     v, err := json.Marshal(nc)
     if err != nil {
@@ -168,7 +170,7 @@ func (x *Node[T]) BindID(id T) error {
     }
     _, err := x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(IDMappingKey, x.opts.keyPrefix, x.opts.name, id), x.opts.id)
     if err != nil {
-        return gerror.Wrapf(err, "Node BindID ID %s NodeName %s put id %v etcd failed", x.opts.id, x.opts.name, id)
+        return gerror.Wrapf(err, "Node BindID ID %s NodeName %s Put id %v etcd failed", x.opts.id, x.opts.name, id)
     }
     return nil
 }
@@ -177,7 +179,7 @@ func (x *Node[T]) BindID(id T) error {
 func (x *Node[T]) UnbindID(id T) error {
     _, err := x.opts.etcdClient.Delete(x.ctx, fmt.Sprintf(IDMappingKey, x.opts.keyPrefix, x.opts.name, id))
     if err != nil {
-        return gerror.Wrapf(err, "Node UnbindID ID %s NodeName %s delete id %v etcd failed", x.opts.id, x.opts.name, id)
+        return gerror.Wrapf(err, "Node UnbindID ID %s NodeName %s Delete id %v etcd failed", x.opts.id, x.opts.name, id)
     }
     return nil
 }

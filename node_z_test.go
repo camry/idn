@@ -19,6 +19,8 @@ import (
 func defaultEtcdClient() (*clientv3.Client, error) {
     cli, err := clientv3.New(clientv3.Config{
         Endpoints:   []string{"192.168.110.5:2379"},
+        Username:    "root",
+        Password:    "123698745",
         DialTimeout: 5 * time.Second,
     })
     return cli, err
@@ -41,7 +43,7 @@ func TestNewNode(t *testing.T) {
             idn.NodeVersion("1.0.0"),
             idn.NodeBuildTime("2026-04-23 17:30:00"),
             idn.NodeBuildCommit("Git Latest Commit Hash"),
-            idn.NodeAddr(fmt.Sprintf("%s:%d", intranetIp, 6000+i)),
+            idn.NodeGRPCAddr(fmt.Sprintf("%s:%d", intranetIp, 6000+i)),
             idn.NodeEtcdClient(etcdClient),
         )
         assert.NoError(t, err1)
