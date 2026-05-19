@@ -88,6 +88,28 @@ func (x *Discovery[T]) IDNode(id T) (INodeConfig, bool) {
     return nc.(*nodeConfig), ok
 }
 
+// minLoadNode 获取负载最小的节点
+func (x *Discovery[T]) minLoadNode() (*nodeConfig, bool) {
+    var minLoadNode *nodeConfig
+    x.ncMap.Range(func(key, value any) bool {
+        if nc, ok1 := value.(*nodeConfig); ok1 {
+            if minLoadNode == nil || nc.Load < minLoadNode.Load {
+                minLoadNode = nc
+            }
+        }
+        return true
+    })
+    if minLoadNode == nil {
+        return nil, false
+    }
+    return minLoadNode, true
+}
+
+// MinLoadNode 获取负载最小的节点
+func (x *Discovery[T]) MinLoadNode() (INodeConfig, bool) {
+    return x.minLoadNode()
+}
+
 // GrpcClient 获取 ID 对应的 gRPC 客户端连接
 func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
     if nodeID, ok := x.imMap.Load(id); ok {
@@ -115,25 +137,17 @@ func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
         }
         return nil, gerror.Newf("Discovery GrpcClient NodeName %s ID %v node %s mutex not found", x.opts.nodeName, id, nodeID)
     }
-    // 从节点字典中获取负载最小的节点
-    var minLoadNode *nodeConfig
-    x.ncMap.Range(func(key, value any) bool {
-        if nc, ok1 := value.(*nodeConfig); ok1 {
-            if minLoadNode == nil || nc.Load < minLoadNode.Load {
-                minLoadNode = nc
-            }
-        }
-        return true
-    })
-    if minLoadNode == nil {
+    // 获取负载最小的节点
+    minLoadNode, ok := x.minLoadNode()
+    if !ok {
         return nil, gerror.Newf("Discovery GrpcClient NodeName %s no available nodes", x.opts.nodeName)
     }
     grpcClient, ok := x.nGrpcMap.Load(minLoadNode.ID)
     if !ok {
         // 创建 gRPC 客户端连接
-        grpcClientNew, err := x.newGrpcClient(minLoadNode)
-        if err != nil {
-            return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s ID %v node %s newGrpcClient failed", x.opts.nodeName, id, minLoadNode.ID)
+        grpcClientNew, err1 := x.newGrpcClient(minLoadNode)
+        if err1 != nil {
+            return nil, gerror.Wrapf(err1, "Discovery GrpcClient NodeName %s ID %v node %s newGrpcClient failed", x.opts.nodeName, id, minLoadNode.ID)
         }
         grpcClient = grpcClientNew
         x.nGrpcMap.Store(minLoadNode.ID, grpcClient)
