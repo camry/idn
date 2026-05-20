@@ -27,6 +27,7 @@ type Discovery[T IDType] struct {
     nGrpcMap           sync.Map                     // 节点 gRPC 客户端连接映射 (节点ID -> gRPC 客户端连接)
     inMap              sync.Map                     // ID 配置映射 (ID -> 节点ID)
     niMap              sync.Map                     // 节点配置映射 (节点ID -> sync.Map[ID]struct{}{})
+    minLoadNodePtr     atomic.Pointer[*nodeConfig]  // 缓存最小负载节点
 }
 
 // NewDiscovery 创建发现服务
@@ -91,6 +92,10 @@ func (x *Discovery[T]) IDNode(id T) (INodeConfig, bool) {
 
 // minLoadNode 获取负载最小的节点
 func (x *Discovery[T]) minLoadNode() (*nodeConfig, bool) {
+    cacheMinLoadNode := x.minLoadNodePtr.Load()
+    if cacheMinLoadNode != nil {
+        return *cacheMinLoadNode, true
+    }
     var minLoadNode *nodeConfig
     x.ncMap.Range(func(key, value any) bool {
         if nc, ok1 := value.(*nodeConfig); ok1 {
@@ -103,6 +108,7 @@ func (x *Discovery[T]) minLoadNode() (*nodeConfig, bool) {
     if minLoadNode == nil {
         return nil, false
     }
+    x.minLoadNodePtr.Store(&minLoadNode)
     return minLoadNode, true
 }
 
@@ -168,6 +174,7 @@ func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
     x.inMap.Store(id, minLoadNode.ID)
     // 更新对应节点的负载值
     atomic.AddInt32(&minLoadNode.Load, 1)
+    x.minLoadNodePtr.Store(nil)
     glog.Debugf("Discovery GrpcClient NodeName %s ID %v node %s Load %d put etcd success %p", x.opts.nodeName, id, minLoadNode.ID, minLoadNode.Load, minLoadNode)
     return grpcClient.(*grpc.ClientConn), nil
 }
@@ -233,6 +240,7 @@ func (x *Discovery[T]) Start(_ context.Context) error {
             _, ok = x.inMap.Load(id)
             if !ok {
                 atomic.AddInt32(&nc.Load, 1)
+                x.minLoadNodePtr.Store(nil)
                 niMapID, _ := x.niMap.LoadOrStore(nodeID, &sync.Map{})
                 niMapID.(*sync.Map).Store(id, struct{}{})
                 x.inMap.Store(id, nodeID)
@@ -382,6 +390,7 @@ func (x *Discovery[T]) watchIDMapping() {
                         _, ok = x.inMap.Load(id)
                         if !ok {
                             atomic.AddInt32(&nc.Load, 1)
+                            x.minLoadNodePtr.Store(nil)
                             niMapID, _ := x.niMap.LoadOrStore(nodeID, &sync.Map{})
                             niMapID.(*sync.Map).Store(id, struct{}{})
                             x.inMap.Store(id, nodeID)
