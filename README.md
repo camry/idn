@@ -42,6 +42,8 @@ func main() {
     // 创建 etcd 客户端
     etcdClient, err := clientv3.New(clientv3.Config{
         Endpoints:   []string{"192.168.110.5:2379"},
+        Username:    "root",
+        Password:    "123456",
         DialTimeout: 5 * time.Second,
     })
     if err != nil {
@@ -58,7 +60,7 @@ func main() {
     ns, err := idn.NewNode[int32](
         idn.NodeName("guild"),
         idn.NodeVersion("1.0.0"),
-        idn.NodeAddr(fmt.Sprintf("%s:%d", intranetIp, 6001)),
+        idn.NodeGRPCAddr(fmt.Sprintf("%s:%d", intranetIp, 6001)),
         idn.NodeEtcdClient(etcdClient),
     )
     if err != nil {
@@ -103,6 +105,8 @@ func main() {
     // 创建 etcd 客户端
     etcdClient, err := clientv3.New(clientv3.Config{
         Endpoints:   []string{"192.168.110.5:2379"},
+        Username:    "root",
+        Password:    "123456",
         DialTimeout: 5 * time.Second,
     })
     if err != nil {
