@@ -184,6 +184,17 @@ func (x *Node[T]) UnbindID(id T) error {
     return nil
 }
 
+// HasID 检查ID是否存在
+func (x *Node[T]) HasID(id T) (bool, error) {
+    ctx, cancel := context.WithTimeout(x.ctx, 2*time.Second)
+    defer cancel()
+    resp, err := x.opts.etcdClient.Get(ctx, fmt.Sprintf(IDMappingKey, x.opts.keyPrefix, x.opts.name, id), clientv3.WithCountOnly())
+    if err != nil {
+        return false, err
+    }
+    return resp.Count > 0, nil
+}
+
 // SetCallRemoveIDFunc 设置节点回调删除ID函数
 func (x *Node[T]) SetCallRemoveIDFunc(f func(id T) error) {
     x.callRemoveIDFunc = f
