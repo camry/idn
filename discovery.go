@@ -23,9 +23,10 @@ type Discovery[T IDType] struct {
     ctx                context.Context              // 发现服务上下文
     cancel             context.CancelFunc           // 发现服务取消函数
     leaseGrantResponse *clientv3.LeaseGrantResponse // 发现服务租约响应
-    ncMap              sync.Map                     // 节点配置映射（节点 ID -> 节点配置）
-    nGrpcMap           sync.Map                     // 节点 gRPC 客户端连接映射（节点 ID -> gRPC 客户端连接）
-    imMap              sync.Map                     // ID 配置映射（ID -> 节点 ID）
+    ncMap              sync.Map                     // 节点配置映射 (节点ID -> 节点配置)
+    nGrpcMap           sync.Map                     // 节点 gRPC 客户端连接映射 (节点ID -> gRPC 客户端连接)
+    inMap              sync.Map                     // ID 配置映射 (ID -> 节点ID)
+    niMap              sync.Map                     // 节点配置映射 (节点ID -> sync.Map[ID]struct{}{})
 }
 
 // NewDiscovery 创建发现服务
@@ -77,7 +78,7 @@ func (x *Discovery[T]) newGrpcClient(nc *nodeConfig) (*grpc.ClientConn, error) {
 
 // IDNode 获取 ID 对应的节点配置
 func (x *Discovery[T]) IDNode(id T) (INodeConfig, bool) {
-    nodeID, ok := x.imMap.Load(id)
+    nodeID, ok := x.inMap.Load(id)
     if !ok {
         return nil, false
     }
@@ -112,7 +113,7 @@ func (x *Discovery[T]) MinLoadNode() (INodeConfig, bool) {
 
 // GrpcClient 获取 ID 对应的 gRPC 客户端连接
 func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
-    if nodeID, ok := x.imMap.Load(id); ok {
+    if nodeID, ok := x.inMap.Load(id); ok {
         if grpcClient, ok2 := x.nGrpcMap.Load(cast.ToString(nodeID)); ok2 {
             return grpcClient.(*grpc.ClientConn), nil
         }
@@ -131,7 +132,7 @@ func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
         return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s ID %v lock etcd mutex failed", x.opts.nodeName, id)
     }
     defer mu.Unlock(x.ctx)
-    if nodeID, ok := x.imMap.Load(id); ok {
+    if nodeID, ok := x.inMap.Load(id); ok {
         if grpcClient, ok2 := x.nGrpcMap.Load(cast.ToString(nodeID)); ok2 {
             return grpcClient.(*grpc.ClientConn), nil
         }
@@ -162,7 +163,9 @@ func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
         return nil, gerror.Wrapf(err, "Discovery GrpcClient NodeName %s put node id %s etcd failed", x.opts.nodeName, minLoadNode.ID)
     }
     // 存储 ID 映射
-    x.imMap.Store(id, minLoadNode.ID)
+    niMapID, _ := x.niMap.LoadOrStore(minLoadNode.ID, &sync.Map{})
+    niMapID.(*sync.Map).Store(id, struct{}{})
+    x.inMap.Store(id, minLoadNode.ID)
     // 更新对应节点的负载值
     atomic.AddInt32(&minLoadNode.Load, 1)
     glog.Debugf("Discovery GrpcClient NodeName %s ID %v node %s Load %d put etcd success %p", x.opts.nodeName, id, minLoadNode.ID, minLoadNode.Load, minLoadNode)
@@ -227,10 +230,12 @@ func (x *Discovery[T]) Start(_ context.Context) error {
             if !ok {
                 return gerror.Newf("Discovery Start NodeName %s DiscoveryMappingsPrefix Key %s Value %s node %s not match", x.opts.nodeName, kv.Key, kv.Value, nodeID)
             }
-            _, ok = x.imMap.Load(id)
+            _, ok = x.inMap.Load(id)
             if !ok {
                 atomic.AddInt32(&nc.Load, 1)
-                x.imMap.Store(id, nodeID)
+                niMapID, _ := x.niMap.LoadOrStore(nodeID, &sync.Map{})
+                niMapID.(*sync.Map).Store(id, struct{}{})
+                x.inMap.Store(id, nodeID)
             }
             glog.Debugf("Discovery Start NodeName %s DiscoveryMappingsPrefix Key %s Value %s", x.opts.nodeName, kv.Key, kv.Value)
         }
@@ -259,7 +264,8 @@ func (x *Discovery[T]) Stop(_ context.Context) error {
     })
     x.nGrpcMap.Clear()
     x.ncMap.Clear()
-    x.imMap.Clear()
+    x.inMap.Clear()
+    x.niMap.Clear()
     return nil
 }
 
@@ -309,14 +315,14 @@ func (x *Discovery[T]) watchServiceNode() {
                             glog.Error(gerror.Newf("Discovery watchServiceNode NodeName %s Key %s Last Split failed", x.opts.nodeName, event.Kv.Key))
                             continue
                         }
-                        x.imMap.Range(func(key, value any) bool {
-                            idK := cast.To[T](key)
-                            nodeIDV := cast.ToString(value)
-                            if nodeIDV == nodeID {
-                                x.imMap.Delete(idK)
-                            }
-                            return true
-                        })
+                        niMap, ok := x.niMap.Load(nodeID)
+                        if ok {
+                            niMap.(*sync.Map).Range(func(key, value any) bool {
+                                idK := cast.To[T](key)
+                                x.inMap.Delete(idK)
+                                return true
+                            })
+                        }
                         if grpcClient, ok1 := x.nGrpcMap.Load(nodeID); ok1 {
                             if conn, ok2 := grpcClient.(*grpc.ClientConn); ok2 {
                                 _ = conn.Close()
@@ -324,6 +330,7 @@ func (x *Discovery[T]) watchServiceNode() {
                             x.nGrpcMap.Delete(nodeID)
                         }
                         x.ncMap.Delete(nodeID)
+                        x.niMap.Delete(nodeID)
                     }
                 }
             }
@@ -372,10 +379,12 @@ func (x *Discovery[T]) watchIDMapping() {
                             }
                             x.nGrpcMap.Store(nodeID, grpcClient)
                         }
-                        _, ok = x.imMap.Load(id)
+                        _, ok = x.inMap.Load(id)
                         if !ok {
                             atomic.AddInt32(&nc.Load, 1)
-                            x.imMap.Store(id, nodeID)
+                            niMapID, _ := x.niMap.LoadOrStore(nodeID, &sync.Map{})
+                            niMapID.(*sync.Map).Store(id, struct{}{})
+                            x.inMap.Store(id, nodeID)
                             glog.Debugf("Discovery watchIDMapping NodeName %s Key %s Value %s Load %d", x.opts.nodeName, event.Kv.Key, event.Kv.Value, nc.Load)
                         }
                     case clientv3.EventTypeDelete:
@@ -387,7 +396,14 @@ func (x *Discovery[T]) watchIDMapping() {
                             continue
                         }
                         id := cast.To[T](idV)
-                        x.imMap.Delete(id)
+                        nodeID := cast.ToString(event.Kv.Value)
+                        x.inMap.Delete(id)
+                        niMapID, ok := x.niMap.Load(nodeID)
+                        if !ok {
+                            glog.Error(gerror.Newf("Discovery watchIDMapping NodeName %s Key %s Value %s Load NodeID not found", x.opts.nodeName, event.Kv.Key, event.Kv.Value))
+                            continue
+                        }
+                        niMapID.(*sync.Map).Delete(id)
                     }
                 }
             }
