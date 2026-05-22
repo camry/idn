@@ -10,6 +10,7 @@ import (
 
     "github.com/camry/g/v2/gerrors/gerror"
     "github.com/camry/g/v2/glog"
+    "github.com/camry/g/v2/gos/mutex"
     "github.com/samber/lo"
     "github.com/spf13/cast"
     clientv3 "go.etcd.io/etcd/client/v3"
@@ -22,6 +23,7 @@ type Discovery[T IDType] struct {
     opts               *discoveryOptions            // 发现服务选项
     ctx                context.Context              // 发现服务上下文
     cancel             context.CancelFunc           // 发现服务取消函数
+    mu                 *mutex.Mutex                 // 发现服务互斥锁
     leaseGrantResponse *clientv3.LeaseGrantResponse // 发现服务租约响应
     ncMap              sync.Map                     // 节点配置映射 (节点ID -> 节点配置)
     nGrpcMap           sync.Map                     // 节点 gRPC 客户端连接映射 (节点ID -> gRPC 客户端连接)
@@ -57,6 +59,7 @@ func NewDiscovery[T IDType](opts ...DiscoveryOption) (*Discovery[T], error) {
         opts:   o,
         ctx:    ctx,
         cancel: cancel,
+        mu:     mutex.New(true),
     }
     if o.leaseTTL > 0 {
         leaseGrantResponse, err := o.etcdClient.Grant(ctx, o.leaseTTL)
@@ -119,6 +122,14 @@ func (x *Discovery[T]) MinLoadNode() (INodeConfig, bool) {
 
 // GrpcClient 获取 ID 对应的 gRPC 客户端连接
 func (x *Discovery[T]) GrpcClient(id T) (*grpc.ClientConn, error) {
+    if nodeID, ok := x.inMap.Load(id); ok {
+        if grpcClient, ok2 := x.nGrpcMap.Load(cast.ToString(nodeID)); ok2 {
+            return grpcClient.(*grpc.ClientConn), nil
+        }
+        return nil, gerror.Newf("Discovery GrpcClient NodeName %s ID %v node %s not found", x.opts.nodeName, id, nodeID)
+    }
+    x.mu.Lock()
+    defer x.mu.Unlock()
     if nodeID, ok := x.inMap.Load(id); ok {
         if grpcClient, ok2 := x.nGrpcMap.Load(cast.ToString(nodeID)); ok2 {
             return grpcClient.(*grpc.ClientConn), nil
@@ -350,7 +361,7 @@ func (x *Discovery[T]) watchServiceNode() {
 
 // watchIDMapping 监听 ID 映射
 func (x *Discovery[T]) watchIDMapping() {
-    watchChan := x.opts.etcdClient.Watch(x.ctx, fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.keyPrefix, x.opts.nodeName), clientv3.WithPrefix())
+    watchChan := x.opts.etcdClient.Watch(x.ctx, fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.keyPrefix, x.opts.nodeName), clientv3.WithPrefix(), clientv3.WithPrevKV())
     for {
         select {
         case <-x.ctx.Done():
