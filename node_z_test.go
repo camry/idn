@@ -37,7 +37,7 @@ func TestNewNode(t *testing.T) {
     }
 
     servers := make([]server.Server, 0, 5)
-    for i := 1; i <= 1; i++ {
+    for i := 1; i <= 5; i++ {
         ns, err1 := idn.NewNode[int32](
             idn.NodeName("guild"),
             idn.NodeVersion("1.0.0"),
@@ -45,6 +45,7 @@ func TestNewNode(t *testing.T) {
             idn.NodeBuildCommit("Git Latest Commit Hash"),
             idn.NodeGRPCAddr(fmt.Sprintf("%s:%d", intranetIp, 6000+i)),
             idn.NodeEtcdClient(etcdClient),
+            idn.NodeLeaseTTL(30),
         )
         assert.NoError(t, err1)
         ns.SetCallRemoveIDFunc(func(id int32) error {
@@ -76,9 +77,9 @@ func TestNewNode(t *testing.T) {
             return nil
         }),
     )
-    time.AfterFunc(time.Second*20, func() {
-        _ = app.Stop()
-    })
+    // time.AfterFunc(time.Second*20, func() {
+    //     _ = app.Stop()
+    // })
     if err := app.Run(); err != nil {
         glog.Fatal(err)
     }

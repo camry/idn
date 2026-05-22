@@ -14,7 +14,6 @@ type discoveryOptions struct {
     ctx             context.Context
     etcdClient      *clientv3.Client
     grpcDialOptions []grpc.DialOption
-    sessionTTL      int
     leaseTTL        int64
     isNodeBind      bool
     limit           int64
@@ -39,11 +38,6 @@ func DiscoveryEtcdClient(c *clientv3.Client) DiscoveryOption {
 // DiscoveryGrpcDialOptions 设置发现服务 gRPC 客户端连接选项
 func DiscoveryGrpcDialOptions(opts ...grpc.DialOption) DiscoveryOption {
     return func(o *discoveryOptions) { o.grpcDialOptions = opts }
-}
-
-// DiscoverySessionTTL 设置发现服务会话 TTL (单位: 秒)
-func DiscoverySessionTTL(ttl int) DiscoveryOption {
-    return func(o *discoveryOptions) { o.sessionTTL = ttl }
 }
 
 // DiscoveryLeaseTTL 设置发现服务租约 TTL (单位: 秒)

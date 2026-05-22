@@ -22,6 +22,7 @@ type nodeOptions struct {
     etcdClient   *clientv3.Client
     limit        int64
     keyPrefix    string
+    leaseTTL     int64
     stopDuration time.Duration
 }
 
@@ -83,6 +84,11 @@ func NodeLimit(limit int64) NodeOption {
 // NodeKeyPrefix 设置节点 KEY 前缀。
 func NodeKeyPrefix(keyPrefix string) NodeOption {
     return func(o *nodeOptions) { o.keyPrefix = keyPrefix }
+}
+
+// NodeLeaseTTL 设置节点租约 TTL。
+func NodeLeaseTTL(leaseTTL int64) NodeOption {
+    return func(o *nodeOptions) { o.leaseTTL = leaseTTL }
 }
 
 // NodeStopDuration 设置节点停止等待时间。

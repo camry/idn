@@ -17,11 +17,13 @@ import (
 )
 
 type Node[T IDType] struct {
-    opts             *nodeOptions       // 节点选项
-    ctx              context.Context    // 节点上下文
-    cancel           context.CancelFunc // 节点取消函数
-    callRemoveIDFunc func(id T) error   // 节点回调删除ID函数
-    isStopped        bool               // 节点是否停止
+    opts               *nodeOptions                            // 节点选项
+    ctx                context.Context                         // 节点上下文
+    cancel             context.CancelFunc                      // 节点取消函数
+    leaseGrantResponse *clientv3.LeaseGrantResponse            // 节点租约响应
+    leaseKeepAliveChan <-chan *clientv3.LeaseKeepAliveResponse // 节点租约续期通道
+    callRemoveIDFunc   func(id T) error                        // 节点回调删除ID函数
+    isStopped          bool                                    // 节点是否停止
 }
 
 // NewNode 创建节点
@@ -29,6 +31,7 @@ func NewNode[T IDType](opts ...NodeOption) (*Node[T], error) {
     o := &nodeOptions{
         ctx:          context.Background(),
         limit:        DefaultLimit,
+        leaseTTL:     30,
         stopDuration: time.Second * 5,
     }
     if id, err := uuid.NewUUID(); err == nil {
@@ -74,7 +77,24 @@ func (x *Node[T]) Addr() string {
 // Start 启动节点
 func (x *Node[T]) Start(_ context.Context) error {
     glog.Infof("[NODE] %s server starting", x.Name())
+
+    // 创建租约并启动自动续期
+    leaseGrantResponse, err := x.opts.etcdClient.Grant(x.ctx, x.opts.leaseTTL)
+    if err != nil {
+        return gerror.Wrapf(err, "Node Start NodeName %s etcdClient.Grant failed", x.Name())
+    }
+    x.leaseGrantResponse = leaseGrantResponse
+    // 启动租约自动续期
+    leaseKeepAliveChan, err := x.opts.etcdClient.KeepAlive(x.ctx, leaseGrantResponse.ID)
+    if err != nil {
+        return gerror.Wrapf(err, "Node Start NodeName %s etcdClient.KeepAlive failed", x.Name())
+    }
+    x.leaseKeepAliveChan = leaseKeepAliveChan
+
     var wg sync.WaitGroup
+    // 协程监听消费租约续期响应，防止阻塞
+    wg.Go(x.watchLeaseKeepAlive)
+    // 监听ID映射
     wg.Go(x.watchIDMapping)
     // 注册节点
     nc := &nodeConfig{
@@ -91,7 +111,7 @@ func (x *Node[T]) Start(_ context.Context) error {
     if err != nil {
         return gerror.Wrapf(err, "Node ID %s NodeName %s Start marshal node config failed", x.opts.id, x.opts.name)
     }
-    _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(ServiceKey, x.opts.keyPrefix, x.opts.name, x.opts.id), string(v))
+    _, err = x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(ServiceKey, x.opts.keyPrefix, x.opts.name, x.opts.id), string(v), clientv3.WithLease(leaseGrantResponse.ID))
     if err != nil {
         return gerror.Wrapf(err, "Node ID %s NodeName %s Start register to etcd failed", x.opts.id, x.opts.name)
     }
@@ -104,6 +124,14 @@ func (x *Node[T]) Stop(_ context.Context) error {
     glog.Infof("[NODE] %s server stopping", x.Name())
     x.isStopped = true
     defer x.cancel()
+    // 撤销租约
+    if x.leaseGrantResponse != nil {
+        if _, err := x.opts.etcdClient.Revoke(x.ctx, x.leaseGrantResponse.ID); err != nil {
+            glog.Warn(gerror.Wrapf(err, "[NODE] Stop etcdClient.Revoke lease %d failed", x.leaseGrantResponse.ID))
+        }
+        x.leaseGrantResponse = nil
+        x.leaseKeepAliveChan = nil
+    }
     // 注销节点
     nodeServiceKey := fmt.Sprintf(ServiceKey, x.opts.keyPrefix, x.opts.name, x.opts.id)
     _, err := x.opts.etcdClient.Delete(x.ctx, nodeServiceKey)
@@ -158,7 +186,7 @@ func (x *Node[T]) Stop(_ context.Context) error {
             startKey = string(append(lastKV.Key, 0))
         }
     }
-    // 等待3秒，确保所有删除操作生效
+    // 等待确保所有删除操作生效
     time.Sleep(x.opts.stopDuration)
     return nil
 }
@@ -168,7 +196,10 @@ func (x *Node[T]) BindID(id T) error {
     if x.isStopped {
         return gerror.Newf("Node BindID ID %s NodeName %s is stopped", x.opts.id, x.opts.name)
     }
-    _, err := x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(IDMappingKey, x.opts.keyPrefix, x.opts.name, id), x.opts.id)
+    if x.leaseGrantResponse == nil {
+        return gerror.Newf("Node BindID ID %s NodeName %s leaseGrantResponse is nil", x.opts.id, x.opts.name)
+    }
+    _, err := x.opts.etcdClient.Put(x.ctx, fmt.Sprintf(IDMappingKey, x.opts.keyPrefix, x.opts.name, id), x.opts.id, clientv3.WithLease(x.leaseGrantResponse.ID))
     if err != nil {
         return gerror.Wrapf(err, "Node BindID ID %s NodeName %s Put id %v etcd failed", x.opts.id, x.opts.name, id)
     }
@@ -200,6 +231,23 @@ func (x *Node[T]) SetCallRemoveIDFunc(f func(id T) error) {
     x.callRemoveIDFunc = f
 }
 
+// watchLeaseKeepAlive 监听租约续期状态
+func (x *Node[T]) watchLeaseKeepAlive() {
+    for {
+        select {
+        case <-x.ctx.Done():
+            glog.Debugf("Node watchLeaseKeepAlive NodeName %s context canceled", x.Name())
+            return
+        case _, ok := <-x.leaseKeepAliveChan:
+            if !ok {
+                glog.Errorf("Node watchLeaseKeepAlive NodeName %s lease keepalive channel closed", x.Name())
+                return
+            }
+            // glog.Debugf("Node watchLeaseKeepAlive NodeName %s lease %d TTL %d", x.Name(), resp.ID, resp.TTL)
+        }
+    }
+}
+
 // watchIDMapping 监听 ID 映射
 func (x *Node[T]) watchIDMapping() {
     watchChan := x.opts.etcdClient.Watch(x.ctx, fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.keyPrefix, x.opts.name), clientv3.WithPrefix(), clientv3.WithPrevKV())
@@ -208,30 +256,30 @@ func (x *Node[T]) watchIDMapping() {
         case <-x.ctx.Done():
             glog.Debugf("Node watchIDMapping NodeName %s NodeID %s Watch context canceled", x.opts.name, x.opts.id)
             return
-        case response, ok := <-watchChan:
-            if !ok {
+        case response, cok := <-watchChan:
+            if !cok {
                 return
             }
             for _, event := range response.Events {
                 switch event.Type {
                 case clientv3.EventTypeDelete:
-                    glog.Debugf("Node watchIDMapping NodeName %s NodeID %s Key %s Value %s deleted", x.opts.name, x.opts.id, event.Kv.Key, event.PrevKv.Value)
+                    glog.Debugf("Node watchIDMapping EventTypeDelete NodeName %s NodeID %s Key %s Value %s deleted", x.opts.name, x.opts.id, event.Kv.Key, event.PrevKv.Value)
                     nodeID := cast.ToString(event.PrevKv.Value)
                     if nodeID == x.opts.id {
                         // 处理键被删除的逻辑
                         idV, ok := lo.Last(strings.Split(string(event.Kv.Key), "/"))
                         if !ok {
-                            glog.Error(gerror.Newf("Node watchIDMapping NodeName %s Key %s Last Split failed", x.opts.name, event.Kv.Key))
+                            glog.Error(gerror.Newf("Node watchIDMapping EventTypeDelete NodeName %s Key %s Last Split failed", x.opts.name, event.Kv.Key))
                             continue
                         }
                         if x.callRemoveIDFunc != nil {
                             id, err := cast.ToE[T](idV)
                             if err != nil {
-                                glog.Error(gerror.Wrapf(err, "Node watchIDMapping NodeName %s Key %s ToE idV %s failed", x.opts.name, event.Kv.Key, idV))
+                                glog.Error(gerror.Wrapf(err, "Node watchIDMapping EventTypeDelete NodeName %s Key %s ToE idV %s failed", x.opts.name, event.Kv.Key, idV))
                             } else {
                                 err = x.callRemoveIDFunc(id)
                                 if err != nil {
-                                    glog.Error(gerror.Wrapf(err, "Node watchIDMapping NodeName %s Key %s Delete failed", x.opts.name, event.Kv.Key))
+                                    glog.Error(gerror.Wrapf(err, "Node watchIDMapping EventTypeDelete NodeName %s Key %s Delete failed", x.opts.name, event.Kv.Key))
                                 }
                             }
                         }
