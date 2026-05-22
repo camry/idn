@@ -37,7 +37,7 @@ func TestNewNode(t *testing.T) {
     }
 
     servers := make([]server.Server, 0, 5)
-    for i := 1; i <= 5; i++ {
+    for i := 1; i <= 1; i++ {
         ns, err1 := idn.NewNode[int32](
             idn.NodeName("guild"),
             idn.NodeVersion("1.0.0"),

@@ -36,7 +36,7 @@ func TestNewDiscovery(t *testing.T) {
 
     time.AfterFunc(time.Second*1, func() {
         var wg sync.WaitGroup
-        for i := 0; i < 3; i++ {
+        for i := 0; i < 100; i++ {
             wg.Go(func() {
                 _, err = dsList[0].GrpcClient(int32(i))
                 if err != nil {
@@ -69,9 +69,9 @@ func TestNewDiscovery(t *testing.T) {
             return nil
         }),
     )
-    time.AfterFunc(time.Second*10, func() {
-        _ = app.Stop()
-    })
+    // time.AfterFunc(time.Second*10, func() {
+    //     _ = app.Stop()
+    // })
     if err := app.Run(); err != nil {
         glog.Fatal(err)
     }

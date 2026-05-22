@@ -140,10 +140,10 @@ func (x *Node[T]) Stop(_ context.Context) error {
                 wg.Go(func() {
                     ch <- struct{}{}
                     ctx, cancel := context.WithTimeout(x.ctx, 5*time.Second)
-                    _, err = x.opts.etcdClient.Txn(ctx).Then(opDeleteListV...).Commit()
+                    _, err2 := x.opts.etcdClient.Txn(ctx).Then(opDeleteListV...).Commit()
                     cancel()
-                    if err != nil {
-                        glog.Error(gerror.Wrapf(err, "Node Stop ID %s NodeName %s DiscoveryMappingsPrefix %s Delete etcd failed", x.opts.id, x.opts.name, discoveryMappingsPrefixKey))
+                    if err2 != nil {
+                        glog.Error(gerror.Wrapf(err2, "Node Stop ID %s NodeName %s DiscoveryMappingsPrefix %s Delete etcd failed", x.opts.id, x.opts.name, discoveryMappingsPrefixKey))
                     }
                     <-ch
                 })
@@ -208,23 +208,28 @@ func (x *Node[T]) watchIDMapping() {
         case <-x.ctx.Done():
             glog.Debugf("Node watchIDMapping NodeName %s NodeID %s Watch context canceled", x.opts.name, x.opts.id)
             return
-        default:
-            for response := range watchChan {
-                for _, event := range response.Events {
-                    switch event.Type {
-                    case clientv3.EventTypeDelete:
-                        glog.Debugf("Node watchIDMapping NodeName %s NodeID %s Key %s Value %s deleted", x.opts.name, x.opts.id, event.Kv.Key, event.PrevKv.Value)
-                        nodeID := cast.ToString(event.PrevKv.Value)
-                        if nodeID == x.opts.id {
-                            // 处理键被删除的逻辑
-                            idV, ok := lo.Last(strings.Split(string(event.Kv.Key), "/"))
-                            if !ok {
-                                glog.Error(gerror.Newf("Node watchIDMapping NodeName %s Key %s Last Split failed", x.opts.name, event.Kv.Key))
-                                continue
-                            }
-                            id := cast.To[T](idV)
-                            if x.callRemoveIDFunc != nil {
-                                err := x.callRemoveIDFunc(id)
+        case response, ok := <-watchChan:
+            if !ok {
+                return
+            }
+            for _, event := range response.Events {
+                switch event.Type {
+                case clientv3.EventTypeDelete:
+                    glog.Debugf("Node watchIDMapping NodeName %s NodeID %s Key %s Value %s deleted", x.opts.name, x.opts.id, event.Kv.Key, event.PrevKv.Value)
+                    nodeID := cast.ToString(event.PrevKv.Value)
+                    if nodeID == x.opts.id {
+                        // 处理键被删除的逻辑
+                        idV, ok := lo.Last(strings.Split(string(event.Kv.Key), "/"))
+                        if !ok {
+                            glog.Error(gerror.Newf("Node watchIDMapping NodeName %s Key %s Last Split failed", x.opts.name, event.Kv.Key))
+                            continue
+                        }
+                        if x.callRemoveIDFunc != nil {
+                            id, err := cast.ToE[T](idV)
+                            if err != nil {
+                                glog.Error(gerror.Wrapf(err, "Node watchIDMapping NodeName %s Key %s ToE idV %s failed", x.opts.name, event.Kv.Key, idV))
+                            } else {
+                                err = x.callRemoveIDFunc(id)
                                 if err != nil {
                                     glog.Error(gerror.Wrapf(err, "Node watchIDMapping NodeName %s Key %s Delete failed", x.opts.name, event.Kv.Key))
                                 }
