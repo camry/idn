@@ -31,7 +31,7 @@ type Discovery[T IDType] struct {
     nGrpcMap           sync.Map                                // 节点 gRPC 客户端连接映射 (节点ID -> gRPC 客户端连接)
     inMap              sync.Map                                // ID 配置映射 (ID -> 节点ID)
     niMap              sync.Map                                // 节点配置映射 (节点ID -> sync.Map[ID]struct{}{})
-    minLoadNodePtr     atomic.Pointer[*nodeConfig]             // 缓存最小负载节点
+    minLoadNodePtr     atomic.Pointer[nodeConfig]              // 缓存最小负载节点
 }
 
 // NewDiscovery 创建发现服务
@@ -92,7 +92,7 @@ func (x *Discovery[T]) IDNode(id T) (INodeConfig, bool) {
 func (x *Discovery[T]) minLoadNode() (*nodeConfig, bool) {
     cacheMinLoadNode := x.minLoadNodePtr.Load()
     if cacheMinLoadNode != nil {
-        return *cacheMinLoadNode, true
+        return cacheMinLoadNode, true
     }
     var minLoadNode *nodeConfig
     x.ncMap.Range(func(key, value any) bool {
@@ -106,7 +106,7 @@ func (x *Discovery[T]) minLoadNode() (*nodeConfig, bool) {
     if minLoadNode == nil {
         return nil, false
     }
-    x.minLoadNodePtr.Store(&minLoadNode)
+    x.minLoadNodePtr.Store(minLoadNode)
     return minLoadNode, true
 }
 

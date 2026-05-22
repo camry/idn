@@ -6,6 +6,7 @@ import (
     "fmt"
     "strings"
     "sync"
+    "sync/atomic"
     "time"
 
     "github.com/camry/g/v2/gerrors/gerror"
@@ -23,7 +24,7 @@ type Node[T IDType] struct {
     leaseGrantResponse *clientv3.LeaseGrantResponse            // 节点租约响应
     leaseKeepAliveChan <-chan *clientv3.LeaseKeepAliveResponse // 节点租约续期通道
     callRemoveIDFunc   func(id T) error                        // 节点回调删除ID函数
-    isStopped          bool                                    // 节点是否停止
+    isStopped          atomic.Bool                             // 节点是否停止
 }
 
 // NewNode 创建节点
@@ -122,7 +123,7 @@ func (x *Node[T]) Start(_ context.Context) error {
 // Stop 停止节点
 func (x *Node[T]) Stop(_ context.Context) error {
     glog.Infof("[NODE] %s server stopping", x.Name())
-    x.isStopped = true
+    x.isStopped.Store(true)
     defer x.cancel()
     // 撤销租约
     if x.leaseGrantResponse != nil {
@@ -193,7 +194,7 @@ func (x *Node[T]) Stop(_ context.Context) error {
 
 // BindID 绑定ID
 func (x *Node[T]) BindID(id T) error {
-    if x.isStopped {
+    if x.isStopped.Load() {
         return gerror.Newf("Node BindID ID %s NodeName %s is stopped", x.opts.id, x.opts.name)
     }
     if x.leaseGrantResponse == nil {
