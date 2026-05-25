@@ -133,12 +133,6 @@ func (x *Node[T]) Stop(_ context.Context) error {
         x.leaseGrantResponse = nil
         x.leaseKeepAliveChan = nil
     }
-    // 注销节点
-    nodeServiceKey := fmt.Sprintf(ServiceKey, x.opts.keyPrefix, x.opts.name, x.opts.id)
-    _, err := x.opts.etcdClient.Delete(x.ctx, nodeServiceKey)
-    if err != nil {
-        return gerror.Wrapf(err, "Node Stop ID %s NodeName %s ServiceKey %s Delete etcd failed", x.opts.id, x.opts.name, nodeServiceKey)
-    }
     // 删除ID映射
     discoveryMappingsPrefixKey := fmt.Sprintf(DiscoveryMappingsPrefix, x.opts.keyPrefix, x.opts.name)
     startKey := discoveryMappingsPrefixKey
@@ -169,8 +163,8 @@ func (x *Node[T]) Stop(_ context.Context) error {
                 wg.Go(func() {
                     ch <- struct{}{}
                     ctx, cancel := context.WithTimeout(x.ctx, 5*time.Second)
+                    defer cancel()
                     _, err2 := x.opts.etcdClient.Txn(ctx).Then(opDeleteListV...).Commit()
-                    cancel()
                     if err2 != nil {
                         glog.Error(gerror.Wrapf(err2, "Node Stop ID %s NodeName %s DiscoveryMappingsPrefix %s Delete etcd failed", x.opts.id, x.opts.name, discoveryMappingsPrefixKey))
                     }
@@ -241,7 +235,7 @@ func (x *Node[T]) watchLeaseKeepAlive() {
             return
         case _, ok := <-x.leaseKeepAliveChan:
             if !ok {
-                glog.Errorf("Node watchLeaseKeepAlive NodeName %s lease keepalive channel closed", x.Name())
+                glog.Warnf("Node watchLeaseKeepAlive NodeName %s lease keepalive channel closed", x.Name())
                 return
             }
             // glog.Debugf("Node watchLeaseKeepAlive NodeName %s lease %d TTL %d", x.Name(), resp.ID, resp.TTL)

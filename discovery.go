@@ -295,12 +295,6 @@ func (x *Discovery[T]) Stop(_ context.Context) error {
         x.leaseGrantResponse = nil
         x.leaseKeepAliveChan = nil
     }
-    // 关闭会话
-    if x.session != nil {
-        if err := x.session.Close(); err != nil {
-            glog.Warn(gerror.Wrapf(err, "[DISCOVERY] Stop node %s session close failed", x.opts.nodeName))
-        }
-    }
 
     // 关闭所有 gRPC 客户端连接
     x.nGrpcMap.Range(func(key, value any) bool {
@@ -309,6 +303,7 @@ func (x *Discovery[T]) Stop(_ context.Context) error {
         }
         return true
     })
+
     x.nGrpcMap.Clear()
     x.ncMap.Clear()
     x.inMap.Clear()
@@ -325,7 +320,7 @@ func (x *Discovery[T]) watchLeaseKeepAlive() {
             return
         case _, ok := <-x.leaseKeepAliveChan:
             if !ok {
-                glog.Debugf("Discovery watchLeaseKeepAlive NodeName %s lease keepalive channel closed", x.opts.nodeName)
+                glog.Warnf("Discovery watchLeaseKeepAlive NodeName %s lease keepalive channel closed", x.opts.nodeName)
                 return
             }
             // glog.Debugf("Discovery watchLeaseKeepAlive NodeName %s lease %d TTL %d", x.opts.nodeName, resp.ID, resp.TTL)
