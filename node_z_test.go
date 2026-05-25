@@ -77,9 +77,9 @@ func TestNewNode(t *testing.T) {
             return nil
         }),
     )
-    // time.AfterFunc(time.Second*20, func() {
-    //     _ = app.Stop()
-    // })
+    time.AfterFunc(time.Second*20, func() {
+        _ = app.Stop()
+    })
     if err := app.Run(); err != nil {
         glog.Fatal(err)
     }
