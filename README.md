@@ -58,7 +58,7 @@ func main() {
 
     // 创建节点服务
     ns, err := idn.NewNode[int32](
-        idn.NodeName("guild"),
+        idn.NodeName("uid"),
         idn.NodeVersion("1.0.0"),
         idn.NodeGRPCAddr(fmt.Sprintf("%s:%d", intranetIp, 6001)),
         idn.NodeEtcdClient(etcdClient),
@@ -115,7 +115,7 @@ func main() {
 
     // 创建发现服务
     ds,err := idn.NewDiscovery[int32](
-        idn.DiscoveryNodeName("guild"),
+        idn.DiscoveryNodeName("uid"),
         idn.DiscoveryEtcdClient(etcdClient),
         idn.DiscoveryLeaseTTL(5),
     )

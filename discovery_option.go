@@ -2,7 +2,9 @@ package idn
 
 import (
     "context"
+    "time"
 
+    "github.com/redis/go-redis/v9"
     clientv3 "go.etcd.io/etcd/client/v3"
     "google.golang.org/grpc"
 )
@@ -10,14 +12,18 @@ import (
 type DiscoveryOption func(*discoveryOptions)
 
 type discoveryOptions struct {
+    project         string
     nodeName        string
     ctx             context.Context
     etcdClient      *clientv3.Client
+    redisClient     *redis.Client
     grpcDialOptions []grpc.DialOption
-    leaseTTL        int64
-    isNodeBind      bool
-    limit           int64
-    keyPrefix       string
+    minLoadNodeTTL  time.Duration
+}
+
+// DiscoveryProject 设置发现服务项目名称
+func DiscoveryProject(project string) DiscoveryOption {
+    return func(o *discoveryOptions) { o.project = project }
 }
 
 // DiscoveryNodeName 设置发现服务节点名称
@@ -35,27 +41,17 @@ func DiscoveryEtcdClient(c *clientv3.Client) DiscoveryOption {
     return func(o *discoveryOptions) { o.etcdClient = c }
 }
 
+// DiscoveryRedisClient 设置发现服务 redis 客户端
+func DiscoveryRedisClient(c *redis.Client) DiscoveryOption {
+    return func(o *discoveryOptions) { o.redisClient = c }
+}
+
 // DiscoveryGrpcDialOptions 设置发现服务 gRPC 客户端连接选项
 func DiscoveryGrpcDialOptions(opts ...grpc.DialOption) DiscoveryOption {
     return func(o *discoveryOptions) { o.grpcDialOptions = opts }
 }
 
-// DiscoveryLeaseTTL 设置发现服务租约 TTL (单位: 秒)
-func DiscoveryLeaseTTL(ttl int64) DiscoveryOption {
-    return func(o *discoveryOptions) { o.leaseTTL = ttl }
-}
-
-// DiscoveryIsNodeBind 设置发现服务是否节点绑定
-func DiscoveryIsNodeBind(isNodeBind bool) DiscoveryOption {
-    return func(o *discoveryOptions) { o.isNodeBind = isNodeBind }
-}
-
-// DiscoveryLimit 设置发现服务批量操作限制
-func DiscoveryLimit(limit int64) DiscoveryOption {
-    return func(o *discoveryOptions) { o.limit = limit }
-}
-
-// DiscoveryKeyPrefix 设置发现服务 KEY 前缀。
-func DiscoveryKeyPrefix(keyPrefix string) DiscoveryOption {
-    return func(o *discoveryOptions) { o.keyPrefix = keyPrefix }
+// DiscoveryMinLoadNodeTTL 设置发现服务最小负载节点 TTL
+func DiscoveryMinLoadNodeTTL(ttl time.Duration) DiscoveryOption {
+    return func(o *discoveryOptions) { o.minLoadNodeTTL = ttl }
 }

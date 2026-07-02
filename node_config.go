@@ -1,17 +1,14 @@
 package idn
 
-import "sync/atomic"
-
 type nodeConfig struct {
-    ID          string       `json:"id"`
-    Name        string       `json:"name"`
-    Version     string       `json:"version"`
-    BuildTime   string       `json:"build_time"`
-    BuildCommit string       `json:"build_commit"`
-    HTTPAddr    string       `json:"http_addr"`
-    GRPCAddr    string       `json:"grpc_addr"`
-    TCPAddr     string       `json:"tcp_addr"`
-    Load        atomic.Int32 `json:"-"`
+    ID          string `json:"id"`           // 节点ID
+    Name        string `json:"name"`         // 节点名称
+    Version     string `json:"version"`      // 节点版本
+    BuildTime   string `json:"build_time"`   // 节点构建时间
+    BuildCommit string `json:"build_commit"` // 节点构建提交
+    HTTPAddr    string `json:"http_addr"`    // 节点 HTTP 地址
+    GRPCAddr    string `json:"grpc_addr"`    // 节点 GRPC 地址
+    TCPAddr     string `json:"tcp_addr"`     // 节点 TCP 地址
 }
 
 func (x *nodeConfig) GetID() string {
@@ -44,8 +41,4 @@ func (x *nodeConfig) GetGRPCAddr() string {
 
 func (x *nodeConfig) GetTCPAddr() string {
     return x.TCPAddr
-}
-
-func (x *nodeConfig) GetLoad() int32 {
-    return x.Load.Load()
 }

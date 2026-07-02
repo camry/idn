@@ -2,33 +2,37 @@ package idn
 
 import (
     "context"
-    "time"
 
+    "github.com/redis/go-redis/v9"
     clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 type NodeOption func(o *nodeOptions)
 
 type nodeOptions struct {
-    id           string
-    name         string
-    version      string
-    buildTime    string
-    buildCommit  string
-    httpAddr     string
-    grpcAddr     string
-    tcpAddr      string
-    ctx          context.Context
-    etcdClient   *clientv3.Client
-    limit        int64
-    keyPrefix    string
-    leaseTTL     int64
-    stopDuration time.Duration
+    id          string
+    project     string
+    name        string
+    version     string
+    buildTime   string
+    buildCommit string
+    httpAddr    string
+    grpcAddr    string
+    tcpAddr     string
+    ctx         context.Context
+    etcdClient  *clientv3.Client
+    redisClient *redis.Client
+    leaseTTL    int64
 }
 
 // NodeID 设置节点ID
 func NodeID(id string) NodeOption {
     return func(o *nodeOptions) { o.id = id }
+}
+
+// NodeProject 设置节点项目
+func NodeProject(project string) NodeOption {
+    return func(o *nodeOptions) { o.project = project }
 }
 
 // NodeName 设置节点名称
@@ -76,22 +80,12 @@ func NodeEtcdClient(c *clientv3.Client) NodeOption {
     return func(o *nodeOptions) { o.etcdClient = c }
 }
 
-// NodeLimit 设置节点批量操作限制
-func NodeLimit(limit int64) NodeOption {
-    return func(o *nodeOptions) { o.limit = limit }
-}
-
-// NodeKeyPrefix 设置节点 KEY 前缀。
-func NodeKeyPrefix(keyPrefix string) NodeOption {
-    return func(o *nodeOptions) { o.keyPrefix = keyPrefix }
+// NodeRedisClient 设置节点 redis 客户端
+func NodeRedisClient(c *redis.Client) NodeOption {
+    return func(o *nodeOptions) { o.redisClient = c }
 }
 
 // NodeLeaseTTL 设置节点租约 TTL。
 func NodeLeaseTTL(leaseTTL int64) NodeOption {
     return func(o *nodeOptions) { o.leaseTTL = leaseTTL }
-}
-
-// NodeStopDuration 设置节点停止等待时间。
-func NodeStopDuration(stopDuration time.Duration) NodeOption {
-    return func(o *nodeOptions) { o.stopDuration = stopDuration }
 }

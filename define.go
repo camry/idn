@@ -1,15 +1,26 @@
 package idn
 
 const (
-    MutexMappingPrefix      = "%s/idn/nodes/%s/mutex/mapping" // ID互斥锁键前缀
-    DiscoveryMappingsPrefix = "%s/idn/nodes/%s/mapping"       // 发现ID映射键
-    IDMappingKey            = "%s/idn/nodes/%s/mapping/%v"    // 节点ID映射键
-    DiscoveryServicesPrefix = "%s/idn/nodes/%s/service"       // 发现服务键
-    ServiceKey              = "%s/idn/nodes/%s/service/%s"    // 节点服务键
-)
+    // ServiceKey 节点服务键
+    // note: 服务键格式为 /项目名称/idn/nodes/节点名称/service/节点ID
+    ServiceKey = "/%s/idn/nodes/%s/service/%s"
 
-const (
-    DefaultLimit = int64(1000) // 默认批量操作限制
+    // ServiceKeyPrefix 服务键前缀
+    // note: 服务键前缀格式为 /项目名称/idn/nodes/节点名称/service
+    ServiceKeyPrefix = "/%s/idn/nodes/%s/service"
+
+    // ServiceLoadKey 服务负载键
+    // note: 服务负载键格式为 {项目名称}:idn:{节点名称}:load
+    // eg: wild:idn:gs:load
+    ServiceLoadKey = "%s:idn:%s:load"
+
+    // IDMappingKey 节点ID映射键
+    // note: ID映射键格式为 {项目名称}:idn:{节点名称}:{ID名称}:{ID}
+    // eg: wild:idn:gs:uid:10001-12872001
+    IDMappingKey = "%s:idn:%s:%s:%v"
+
+    // MinLoadNodeCacheKey 最小负载节点缓存键
+    MinLoadNodeCacheKey = "min-load-node"
 )
 
 type IDType interface {
@@ -25,5 +36,4 @@ type INodeConfig interface {
     GetHTTPAddr() string
     GetGRPCAddr() string
     GetTCPAddr() string
-    GetLoad() int32
 }

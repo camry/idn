@@ -19,14 +19,19 @@ func TestNewDiscovery(t *testing.T) {
     if err != nil {
         t.Fatal(err)
     }
+    redisClient, err := defaultRedisClient()
+    if err != nil {
+        t.Fatal(err)
+    }
 
     servers := make([]server.Server, 0, 5)
     dsList := make([]*idn.Discovery[int32], 0, 5)
     for i := 0; i < 5; i++ {
         ds, err1 := idn.NewDiscovery[int32](
-            idn.DiscoveryNodeName("guild"),
+            idn.DiscoveryProject("project"),
+            idn.DiscoveryNodeName("server"),
             idn.DiscoveryEtcdClient(etcdClient),
-            idn.DiscoveryLeaseTTL(30),
+            idn.DiscoveryRedisClient(redisClient),
         )
         assert.NoError(t, err1)
         servers = append(servers, ds)
@@ -35,9 +40,9 @@ func TestNewDiscovery(t *testing.T) {
 
     time.AfterFunc(time.Second*1, func() {
         var wg sync.WaitGroup
-        for i := 0; i < 100; i++ {
+        for i := 1; i < 100; i++ {
             wg.Go(func() {
-                _, err = dsList[0].GrpcClient(int32(i))
+                _, err = dsList[0].GrpcClient("uid", int32(i))
                 if err != nil {
                     t.Fatal(err)
                 }
