@@ -2,6 +2,7 @@ package idn
 
 import (
     "context"
+    "time"
 
     "github.com/redis/go-redis/v9"
     clientv3 "go.etcd.io/etcd/client/v3"
@@ -10,19 +11,22 @@ import (
 type NodeOption func(o *nodeOptions)
 
 type nodeOptions struct {
-    id          string
-    project     string
-    name        string
-    version     string
-    buildTime   string
-    buildCommit string
-    httpAddr    string
-    grpcAddr    string
-    tcpAddr     string
-    ctx         context.Context
-    etcdClient  *clientv3.Client
-    redisClient *redis.Client
-    leaseTTL    int64
+    id                   string
+    project              string
+    name                 string
+    version              string
+    buildTime            string
+    buildCommit          string
+    httpAddr             string
+    grpcAddr             string
+    tcpAddr              string
+    ctx                  context.Context
+    etcdClient           *clientv3.Client
+    redisClient          *redis.Client
+    leaseTTL             int64
+    batchOpFlushInterval time.Duration
+    batchOpSize          int
+    batchOpChanSize      int
 }
 
 // NodeID 设置节点ID
@@ -88,4 +92,19 @@ func NodeRedisClient(c *redis.Client) NodeOption {
 // NodeLeaseTTL 设置节点租约 TTL。
 func NodeLeaseTTL(leaseTTL int64) NodeOption {
     return func(o *nodeOptions) { o.leaseTTL = leaseTTL }
+}
+
+// NodeBatchOpFlushInterval 设置批聚合刷新时间间隔，默认 5ms。
+func NodeBatchOpFlushInterval(d time.Duration) NodeOption {
+    return func(o *nodeOptions) { o.batchOpFlushInterval = d }
+}
+
+// NodeBatchOpSize 设置单批最大条数，达到后立即刷新，默认 500。
+func NodeBatchOpSize(n int) NodeOption {
+    return func(o *nodeOptions) { o.batchOpSize = n }
+}
+
+// NodeBatchOpChanSize 设置批聚合 channel 缓冲大小，默认 10000。
+func NodeBatchOpChanSize(n int) NodeOption {
+    return func(o *nodeOptions) { o.batchOpChanSize = n }
 }
