@@ -95,16 +95,16 @@ func NodeLeaseTTL(leaseTTL int64) NodeOption {
 }
 
 // NodeBatchOpFlushInterval 设置批聚合刷新时间间隔，默认 5ms。
-func NodeBatchOpFlushInterval(d time.Duration) NodeOption {
-    return func(o *nodeOptions) { o.batchOpFlushInterval = d }
+func NodeBatchOpFlushInterval(batchOpFlushInterval time.Duration) NodeOption {
+    return func(o *nodeOptions) { o.batchOpFlushInterval = batchOpFlushInterval }
 }
 
 // NodeBatchOpSize 设置单批最大条数，达到后立即刷新，默认 500。
-func NodeBatchOpSize(n int) NodeOption {
-    return func(o *nodeOptions) { o.batchOpSize = n }
+func NodeBatchOpSize(batchOpSize int) NodeOption {
+    return func(o *nodeOptions) { o.batchOpSize = batchOpSize }
 }
 
 // NodeBatchOpChanSize 设置批聚合 channel 缓冲大小，默认 10000。
-func NodeBatchOpChanSize(n int) NodeOption {
-    return func(o *nodeOptions) { o.batchOpChanSize = n }
+func NodeBatchOpChanSize(batchOpChanSize int) NodeOption {
+    return func(o *nodeOptions) { o.batchOpChanSize = batchOpChanSize }
 }
