@@ -37,7 +37,7 @@ type Node[T IDType] struct {
     leaseGrantResponse *clientv3.LeaseGrantResponse            // 节点租约响应
     leaseKeepAliveChan <-chan *clientv3.LeaseKeepAliveResponse // 节点租约续期通道
     isStopped          atomic.Bool                             // 节点是否停止
-    batchCh            chan *batchOp[T]
+    batchCh            chan batchOp[T]
 }
 
 // NewNode 创建节点
@@ -144,7 +144,7 @@ func (x *Node[T]) Start(_ context.Context) error {
     }
     x.leaseGrantResponse = leaseGrantResponse
     x.leaseKeepAliveChan = leaseKeepAliveChan
-    x.batchCh = make(chan *batchOp[T], x.opts.batchOpChanSize)
+    x.batchCh = make(chan batchOp[T], x.opts.batchOpChanSize)
     succeeded = true
     var wg sync.WaitGroup
     // 协程监听消费租约续期响应，防止阻塞
@@ -180,7 +180,7 @@ func (x *Node[T]) BindID(idName string, id T, ttl time.Duration) error {
     if x.isStopped.Load() {
         return gerror.Newf("Node BindID %s ID %v NodeID %s NodeName %s is stopped", idName, id, x.opts.id, x.opts.name)
     }
-    x.writeOp(&batchOp[T]{opType: batchOpBind, idName: idName, id: id, ttl: ttl})
+    x.writeOp(batchOp[T]{opType: batchOpBind, idName: idName, id: id, ttl: ttl})
     return nil
 }
 
@@ -189,12 +189,12 @@ func (x *Node[T]) UnbindID(idName string, id T) error {
     if x.isStopped.Load() {
         return gerror.Newf("Node UnbindID %s ID %v NodeID %s NodeName %s is stopped", idName, id, x.opts.id, x.opts.name)
     }
-    x.writeOp(&batchOp[T]{opType: batchOpUnbind, idName: idName, id: id})
+    x.writeOp(batchOp[T]{opType: batchOpUnbind, idName: idName, id: id})
     return nil
 }
 
 // writeOp 将操作写入批聚合 channel
-func (x *Node[T]) writeOp(op *batchOp[T]) {
+func (x *Node[T]) writeOp(op batchOp[T]) {
     select {
     case x.batchCh <- op:
     case <-x.ctx.Done():
@@ -207,7 +207,7 @@ func (x *Node[T]) HeartbeatID(idName string, id T, ttl time.Duration) error {
     if x.isStopped.Load() {
         return gerror.Newf("Node HeartbeatID %s ID %v NodeID %s NodeName %s is stopped", idName, id, x.opts.id, x.opts.name)
     }
-    x.writeOp(&batchOp[T]{opType: batchOpHeartbeat, idName: idName, id: id, ttl: ttl})
+    x.writeOp(batchOp[T]{opType: batchOpHeartbeat, idName: idName, id: id, ttl: ttl})
     return nil
 }
 
@@ -241,7 +241,7 @@ func (x *Node[T]) watchLeaseKeepAlive() {
 func (x *Node[T]) batchOpWorker() {
     ticker := time.NewTicker(x.opts.batchOpFlushInterval)
     defer ticker.Stop()
-    batchOpList := make([]*batchOp[T], 0, x.opts.batchOpSize)
+    batchOpList := make([]batchOp[T], 0, x.opts.batchOpSize)
     for {
         select {
         case op, ok := <-x.batchCh:
@@ -279,7 +279,7 @@ func (x *Node[T]) batchOpWorker() {
 }
 
 // doBatchOpWrite 将一批 batchOp 合并为一次 Redis TxPipelined 执行
-func (x *Node[T]) doBatchOpWrite(batchOpList []*batchOp[T]) {
+func (x *Node[T]) doBatchOpWrite(batchOpList []batchOp[T]) {
     _, err := x.opts.redisClient.TxPipelined(context.Background(), func(pipeliner redis.Pipeliner) error {
         var incr int64
         for _, op := range batchOpList {
