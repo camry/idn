@@ -18,7 +18,7 @@ import (
 type batchOpType uint8
 
 const (
-    batchOpBind      batchOpType = iota
+    batchOpBind batchOpType = iota
     batchOpUnbind
     batchOpHeartbeat
 )
@@ -280,8 +280,8 @@ func (x *Node[T]) batchOpWorker() {
 
 // doBatchOpWrite 将一批 batchOp 合并为一次 Redis TxPipelined 执行
 func (x *Node[T]) doBatchOpWrite(batchOpList []*batchOp[T]) {
-    var incr int64
     _, err := x.opts.redisClient.TxPipelined(context.Background(), func(pipeliner redis.Pipeliner) error {
+        var incr int64
         for _, op := range batchOpList {
             key := fmt.Sprintf(IDMappingKey, x.opts.project, x.opts.name, op.idName, op.id)
             switch op.opType {
