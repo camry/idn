@@ -12,6 +12,7 @@ type NodeOption func(o *nodeOptions)
 
 type nodeOptions struct {
     id                   string
+    nodeMain             bool
     project              string
     name                 string
     version              string
@@ -32,6 +33,11 @@ type nodeOptions struct {
 // NodeID 设置节点ID
 func NodeID(id string) NodeOption {
     return func(o *nodeOptions) { o.id = id }
+}
+
+// NodeMain 设置节点是否为主节点
+func NodeMain(nodeMain bool) NodeOption {
+    return func(o *nodeOptions) { o.nodeMain = nodeMain }
 }
 
 // NodeProject 设置节点项目

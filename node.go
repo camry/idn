@@ -51,14 +51,15 @@ func NewNode[T IDType](opts ...NodeOption) (*Node[T], error) {
         batchOpSize:          500,
         batchOpChanSize:      10000,
     }
-    if id, err := uuid.NewUUID(); err == nil {
-        o.id = id.String()
-    }
     for _, opt := range opts {
         opt(o)
     }
     if o.id == "" {
-        return nil, gerror.Newf("NewNode id can not be empty")
+        id, err := uuid.NewUUID()
+        if err != nil {
+            return nil, gerror.Wrap(err, "NewNode uuid.NewUUID Failed")
+        }
+        o.id = id.String()
     }
     if o.name == "" {
         return nil, gerror.Newf("NewNode ID %s NodeName is empty", o.id)
@@ -80,6 +81,11 @@ func NewNode[T IDType](opts ...NodeOption) (*Node[T], error) {
 // ID 返回节点ID
 func (x *Node[T]) ID() string {
     return x.opts.id
+}
+
+// NodeMain 返回节点是否为主节点
+func (x *Node[T]) NodeMain() bool {
+    return x.opts.nodeMain
 }
 
 // Name 返回节点名称
