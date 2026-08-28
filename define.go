@@ -36,4 +36,5 @@ type INodeConfig interface {
     GetHTTPAddr() string
     GetGRPCAddr() string
     GetTCPAddr() string
+    GetDebug() bool
 }

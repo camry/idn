@@ -202,6 +202,9 @@ func (x *Discovery[T]) Start(_ context.Context) error {
         if err != nil {
             return gerror.Wrapf(err, "Discovery Start NodeName %s DiscoveryServicesPrefix Key %s Value %s Unmarshal etcd failed", x.opts.nodeName, kv.Key, kv.Value)
         }
+        if nc.GetDebug() {
+            continue
+        }
         grpcClient, err1 := x.newGrpcClient(nc)
         if err1 != nil {
             return gerror.Wrapf(err1, "Discovery Start NodeName %s DiscoveryMappingsPrefix Key %s Value %s newGrpcClient failed", x.opts.nodeName, kv.Key, kv.Value)
@@ -260,6 +263,9 @@ func (x *Discovery[T]) watchServiceNode(revision int64) {
                     err := json.Unmarshal(event.Kv.Value, nc)
                     if err != nil {
                         glog.Error(gerror.Wrapf(err, "Discovery watchServiceNode EventTypePut NodeName %s Key %s Value %s Unmarshal etcd failed", x.opts.nodeName, event.Kv.Key, event.Kv.Value))
+                        continue
+                    }
+                    if nc.GetDebug() {
                         continue
                     }
                     x.ncMap.Store(nc.GetID(), nc)

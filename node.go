@@ -134,6 +134,7 @@ func (x *Node[T]) Start(_ context.Context) error {
         HTTPAddr:    x.opts.httpAddr,
         GRPCAddr:    x.opts.grpcAddr,
         TCPAddr:     x.opts.tcpAddr,
+        Debug:       x.opts.debug,
     }
     v, err := json.Marshal(nc)
     if err != nil {

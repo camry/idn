@@ -13,6 +13,7 @@ type NodeOption func(o *nodeOptions)
 type nodeOptions struct {
     id                   string
     nodeMain             bool
+    debug                bool
     project              string
     name                 string
     version              string
@@ -38,6 +39,11 @@ func NodeID(id string) NodeOption {
 // NodeMain 设置节点是否为主节点
 func NodeMain(nodeMain bool) NodeOption {
     return func(o *nodeOptions) { o.nodeMain = nodeMain }
+}
+
+// NodeDebug 设置节点是否为调试模式
+func NodeDebug(debug bool) NodeOption {
+    return func(o *nodeOptions) { o.debug = debug }
 }
 
 // NodeProject 设置节点项目

@@ -9,6 +9,7 @@ type nodeConfig struct {
     HTTPAddr    string `json:"http_addr"`    // 节点 HTTP 地址
     GRPCAddr    string `json:"grpc_addr"`    // 节点 GRPC 地址
     TCPAddr     string `json:"tcp_addr"`     // 节点 TCP 地址
+    Debug       bool   `json:"debug"`        // 节点是否为调试模式
 }
 
 func (x *nodeConfig) GetID() string {
@@ -41,4 +42,8 @@ func (x *nodeConfig) GetGRPCAddr() string {
 
 func (x *nodeConfig) GetTCPAddr() string {
     return x.TCPAddr
+}
+
+func (x *nodeConfig) GetDebug() bool {
+    return x.Debug
 }
