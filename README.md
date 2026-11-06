@@ -15,7 +15,7 @@
 ## 安装
 
 ```bash
-go get gitea.meigushi.go/meigushi/idn
+go get github.com/camry/idn
 ```
 
 **依赖要求**：etcd v3、Redis
@@ -55,7 +55,7 @@ import (
     "github.com/redis/go-redis/v9"
     clientv3 "go.etcd.io/etcd/client/v3"
 
-    "gitea.meigushi.go/meigushi/idn"
+    "github.com/camry/idn"
 )
 
 func main() {
@@ -123,7 +123,7 @@ import (
     "github.com/redis/go-redis/v9"
     clientv3 "go.etcd.io/etcd/client/v3"
 
-    "gitea.meigushi.go/meigushi/idn"
+    "github.com/camry/idn"
 )
 
 func main() {

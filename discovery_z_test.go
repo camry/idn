@@ -11,7 +11,7 @@ import (
     "github.com/camry/g/v2/glog"
     "github.com/stretchr/testify/assert"
 
-    "gitea.meigushi.go/meigushi/idn"
+    "github.com/camry/idn"
 )
 
 func TestNewDiscovery(t *testing.T) {

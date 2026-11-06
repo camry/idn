@@ -15,7 +15,7 @@ import (
     "github.com/stretchr/testify/assert"
     clientv3 "go.etcd.io/etcd/client/v3"
 
-    "gitea.meigushi.go/meigushi/idn"
+    "github.com/camry/idn"
 )
 
 func defaultEtcdClient() (*clientv3.Client, error) {
